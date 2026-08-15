@@ -182,3 +182,13 @@ uvicorn app.main:app --port 8898            # 本地预览（collectors mock=Tru
 1. 代码审查（结构/安全/脱敏/权限）
 2. 对照上线 Checklist 逐项核验
 3. 通过后执行 M4 部署（我走 linux-ops 原子部署流程）
+
+## 8. 审查修复记录（2026-08-15，v0.1.1）
+
+| # | 问题 | 修复 | 验证 |
+|---|---|---|---|
+| 1 | 🔴 tailscale ping 正则未转义（`(S+)`/`[d.]`）→ 真实模式延迟永远解析失败 | `_PONG_RE`/`_LAST_SEEN_RE` 改为 `\S+`/`[\d.]+` | 真实输出 3 例 + 垃圾输入 3 例测试通过 |
+| 2 | 🟠 device_id 原始节点 ID（含敏感指纹）入库/API 未脱敏 | `_norm_device` 用 `_hash_id()` sha256 截断 8 位 | 稳定性/唯一性/不残留测试通过 |
+| 3 | 🟡 `_on_frp_link` 数据缺失（None）时误 resolve 告警 | 仅两项数据齐全且未超阈值才 resolve | 缺失不误判/超阈值告警/恢复 resolve 测试通过 |
+
+新增测试：`test_collectors.py`（4 个回归用例）+ `test_aggregator_fix.py`（2 个）。共 33 测试全过。

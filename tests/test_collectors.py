@@ -69,3 +69,48 @@ def test_sanitize_applied_to_status():
     raw = {"Peer": {"a": {"HostName": "x", "node_key": "nk:1"}}}
     out = sanitize(raw)
     assert out["Peer"]["a"]["node_key"] == "<redacted>"
+
+
+# ---- 审查修复回归（2026-08-15）：真实 ping 输出解析 / device_id 脱敏 ----
+
+def test_ping_regex_parses_real_output():
+    """真实 tailscale ping 输出（t1 B3 实测格式）必须被 _PONG_RE 解析。"""
+    from app.collectors.tailscale import _PONG_RE
+    cases = [
+        # (输出, 期望延迟)
+        ("pong from dc-desktop (100.64.0.2) via DERP(headscale) in 33ms", 33.0),
+        ("pong from oneplus13 (100.64.0.3) via DERP(headscale) in 86ms", 86.0),
+        ("pong from oppo-pad-mini (100.64.0.4) via 223.66.55.189:5243 in 19ms", 19.0),
+    ]
+    for out, expected in cases:
+        m = _PONG_RE.search(out)
+        assert m is not None, f"regex failed on: {out}"
+        assert float(m.group(4)) == expected, f"latency mismatch on: {out}"
+
+
+def test_ping_regex_rejects_garbage():
+    """不匹配真实格式时不应误解析。"""
+    from app.collectors.tailscale import _PONG_RE
+    for bad in ["timeout", "pong from x (1.2.3.4) via DERP in abcms", ""]:
+        assert _PONG_RE.search(bad) is None, f"should not match: {bad!r}"
+
+
+def test_device_id_is_hashed_and_stable():
+    """device_id 必须脱敏（8 位 hash），且同一设备 hash 稳定、不同设备不同。"""
+    from app.collectors.tailscale import _hash_id
+    a = _hash_id("n1234567890abcdef")
+    b = _hash_id("n1234567890abcdef")
+    c = _hash_id("n9876543210fedcba")
+    assert a == b and len(a) == 8
+    assert a != c
+    assert "1234567890" not in a  # 原始 ID 不残留
+
+
+def test_norm_device_uses_hashed_id():
+    """_norm_device 输出的 device_id 必须是 hash 而非原始 ID。"""
+    from app.collectors.tailscale import TailscaleCollector
+    c = TailscaleCollector(mock=True)
+    dev = c._norm_device("key-fallback", {"ID": "nSECRETNODEID123", "HostName": "h1",
+                                          "TailscaleIPs": ["100.64.0.9"], "Online": True})
+    assert dev["device_id"] != "nSECRETNODEID123"
+    assert len(dev["device_id"]) == 8

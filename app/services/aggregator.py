@@ -146,13 +146,17 @@ class Aggregator:
             src = f"frp_link:{dev}"
             lat = d.get("latency_ms")
             loss = d.get("packet_loss_percent")
+            alerted = False
             if lat is not None and lat > config.THRESHOLDS["ts_latency_warn_ms"]:
                 lvl = constants.LEVEL_CRIT if lat > config.THRESHOLDS["ts_latency_crit_ms"]                     else constants.LEVEL_WARN
                 self._alert(lvl, src, f"frp 链路 {dev} 延迟 {lat}ms 异常")
+                alerted = True
             if loss is not None and loss > config.THRESHOLDS["packet_loss_warn_pct"]:
                 lvl = constants.LEVEL_CRIT if loss > config.THRESHOLDS["packet_loss_crit_pct"]                     else constants.LEVEL_WARN
                 self._alert(lvl, src, f"frp 链路 {dev} 丢包 {loss}% 异常")
-            if (lat is None or lat <= config.THRESHOLDS["ts_latency_warn_ms"]) and                (loss is None or loss <= config.THRESHOLDS["packet_loss_warn_pct"]):
+                alerted = True
+            # 仅当两项数据都存在且均未超阈值时才 resolve；数据缺失（None）不判定
+            if not alerted and lat is not None and loss is not None:
                 db.resolve_alerts(src)
 
     # ---------------- system / certs / headscale / network ----------------

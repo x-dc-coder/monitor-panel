@@ -24,8 +24,14 @@ log = logging.getLogger(__name__)
 
 # t1 B3 实测：pong from <hostname> (<ip>) via DERP(<region>) in <X>ms
 # 直连：pong from <hostname> (<ip>) via <ip>:<port> in <X>ms
-_PONG_RE = re.compile(r"pong from (S+) (([d.]+)) via (S+) in ([d.]+)ms")
-_LAST_SEEN_RE = re.compile(r"^d{4}-d{2}-d{2}Td{2}:d{2}:d{2}")
+_PONG_RE = re.compile(r"pong from (\S+) \(([\d.]+)\) via (\S+) in ([\d.]+)ms")
+_LAST_SEEN_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
+
+
+def _hash_id(raw: str) -> str:
+    """节点 ID 脱敏：sha256 截断 8 位十六进制（防指纹泄露，保持唯一标识）。"""
+    import hashlib
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:8]
 
 # mock 设备清单（对齐 t1 B3/B4 实测：4 节点，全部 Online、Relay=headscale）
 _MOCK_DEVICES = [
@@ -125,7 +131,9 @@ class TailscaleCollector(Collector):
         last_seen = self._parse_last_seen(p.get("LastSeen"))
         return {
             "node_id": config.NODE_ID,
-            "device_id": p.get("ID") or key,
+            # 脱敏：tailscale 节点 ID 含敏感指纹（评审 F4/E6）→ sha256 截断 8 位，
+            # 保持设备间唯一且可作 API/入库标识，不落原始 ID
+            "device_id": _hash_id(p.get("ID") or key),
             "name": p.get("HostName") or key,
             "tailscale_ip": v4,
             "os": p.get("OS"),
