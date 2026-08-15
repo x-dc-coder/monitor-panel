@@ -69,7 +69,17 @@ _load_env_file()
 # ================= 服务 =================
 HOST = _env("MONITOR_HOST", "127.0.0.1")          # 仅回环监听，nginx 反代
 PORT = _env_int("MONITOR_PORT", 8898)
-MOCK = _env_bool("MONITOR_MOCK", True)            # 本地开发默认 mock；cloud 部署 MONITOR_MOCK=0
+# 数据模式：true=模拟采集（本地开发默认）| false=真实采集 | snapshot=读取 snapshots/ 真实快照
+MOCK_MODE = _env("MONITOR_MOCK", "true").strip().lower()
+if MOCK_MODE in ("1", "true", "yes", "on"):
+    MOCK, SNAPSHOT = True, False
+elif MOCK_MODE in ("0", "false", "no", "off"):
+    MOCK, SNAPSHOT = False, False
+elif MOCK_MODE == "snapshot":
+    MOCK, SNAPSHOT = False, True
+else:
+    MOCK, SNAPSHOT = True, False
+SNAPSHOT_DIR = BASE_DIR / "snapshots"             # 静态真实数据快照（本机测试用）
 DEBUG = _env_bool("MONITOR_DEBUG", False)
 VERSION = "0.1.0"
 

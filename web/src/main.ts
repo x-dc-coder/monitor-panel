@@ -40,7 +40,10 @@ function renderStatusbar(): void {
   dot("alerts", (o.alerts && o.alerts.unresolved) > 0 ? "crit" : "ok");
   document.getElementById("foot-node")!.textContent =
     (o.nodes && o.nodes[0] && o.nodes[0].id) || "—";
-  document.getElementById("foot-mode")!.textContent = o.mock ? "MOCK" : "实时";
+  const modeTxt = o.mode === "snapshot" ? "SNAPSHOT" : o.mock ? "MOCK" : "实时";
+  document.getElementById("foot-mode")!.textContent = modeTxt;
+  document.getElementById("foot-mode")!.style.color =
+    o.mode === "snapshot" ? "var(--violet)" : o.mock ? "var(--warn)" : "var(--ok)";
 }
 
 /* ---------------- 轮询 ---------------- */

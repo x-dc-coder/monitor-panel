@@ -66,6 +66,7 @@ export interface NodeInfo {
 }
 export interface OverviewData {
   mock: boolean;
+  mode?: "mock" | "snapshot" | "live";
   updated_at: number | null;
   frp: FrpSummary;
   tailscale: TailscaleSummary;

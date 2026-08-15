@@ -227,6 +227,7 @@ class Aggregator:
         updated = max(self.latest_ts.values(), default=None)
         return {
             "mock": config.MOCK,
+            "mode": "snapshot" if config.SNAPSHOT else ("mock" if config.MOCK else "live"),
             "updated_at": updated,
             "frp": {
                 "total": len(tunnels),

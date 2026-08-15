@@ -142,7 +142,5 @@ class SystemCollector(Collector):
         }
         return result
 
-    async def run_once(self) -> CollectorResult:
-        if self.mock:
-            return self._mock_result()
-        return await self._run_real()
+    async def _mock_run(self) -> CollectorResult:
+        return self._mock_result()

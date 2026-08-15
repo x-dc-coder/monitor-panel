@@ -105,9 +105,35 @@ class CollectorResult:
     def add(self, name: str, value: float, ts: float | None = None) -> None:
         self.metrics.append(Metric(name, value, ts))
 
+    # ---- 快照序列化（MONITOR_MOCK=snapshot：静态真实数据本机测试）----
+    def to_snapshot(self) -> dict:
+        return {
+            "node_id": self.node_id,
+            "group": self.group,
+            "metrics": [{"name": m.name, "value": m.value, "ts": m.ts}
+                        for m in self.metrics],
+            "groups": {k: [{"name": m.name, "value": m.value, "ts": m.ts}
+                           for m in v] for k, v in self.groups.items()},
+            "payload": self.payload,
+        }
+
+    @classmethod
+    def from_snapshot(cls, data: dict) -> "CollectorResult":
+        r = cls(node_id=data.get("node_id", "cloud-1"), group=data.get("group", ""))
+        for m in data.get("metrics", []):
+            r.add(m["name"], float(m["value"]), m.get("ts"))
+        for g, ms in data.get("groups", {}).items():
+            r.groups[g] = [Metric(m["name"], float(m["value"]), m.get("ts")) for m in ms]
+        r.payload = data.get("payload")
+        return r
+
 
 class Collector:
-    """采集器基类。子类实现 run_once()，返回 CollectorResult。"""
+    """采集器基类。
+
+    子类实现 _mock_run()（模拟数据）与 _run_real()（真实采集）；
+    run_once() 统一分派：snapshot 模式读 snapshots/<name>.json → mock → real。
+    """
 
     name: str = "base"
     group: str = "base"
@@ -117,4 +143,28 @@ class Collector:
         self.mock = config.MOCK if mock is None else mock
 
     async def run_once(self) -> CollectorResult:
+        if config.SNAPSHOT:
+            return self._snapshot_run()
+        if self.mock:
+            return await self._mock_run()
+        return await self._run_real()
+
+    async def _mock_run(self) -> CollectorResult:
         raise NotImplementedError
+
+    async def _run_real(self) -> CollectorResult:
+        raise NotImplementedError
+
+    def _snapshot_run(self) -> CollectorResult:
+        """读取 scripts/fetch_snapshot.sh 生成的真实数据快照。"""
+        path = config.SNAPSHOT_DIR / f"{self.name}.json"
+        if not path.exists():
+            log.warning("snapshot: %s missing (%s), skip", self.name, path)
+            return CollectorResult(node_id=config.NODE_ID, group=self.group)
+        try:
+            import json
+            with open(path, encoding="utf-8") as f:
+                return CollectorResult.from_snapshot(json.load(f))
+        except Exception:  # noqa: BLE001
+            log.exception("snapshot: %s load failed", self.name)
+            return CollectorResult(node_id=config.NODE_ID, group=self.group)
