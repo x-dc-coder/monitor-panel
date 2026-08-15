@@ -1,0 +1,173 @@
+"""集中配置：端口/周期/阈值/数据源地址/token/探测对/device_map。
+
+- 敏感项一律从环境变量注入（MONITOR_*），支持本地 .env 文件
+  （不入 git，云端部署后 chmod 600）。
+- 本地开发默认 mock=True（无需 cloud 依赖即可跑通全部 API/UI）。
+"""
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+ENV_FILE = BASE_DIR / ".env"
+
+
+def _load_env_file() -> None:
+    """极简 .env 解析（KEY=VALUE，支持 # 注释），避免额外依赖。"""
+    if not ENV_FILE.exists():
+        return
+    for raw in ENV_FILE.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key:
+            os.environ.setdefault(key, value)
+
+
+def _env(key: str, default: str = "") -> str:
+    return os.environ.get(key, default)
+
+
+def _env_bool(key: str, default: bool) -> bool:
+    v = os.environ.get(key)
+    if v is None:
+        return default
+    return v.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _env_int(key: str, default: int) -> int:
+    try:
+        return int(os.environ.get(key, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _env_float(key: str, default: float) -> float:
+    try:
+        return float(os.environ.get(key, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _env_json(key: str, default):
+    v = os.environ.get(key)
+    if v is None:
+        return default
+    try:
+        return json.loads(v)
+    except json.JSONDecodeError:
+        return default
+
+
+_load_env_file()
+
+# ================= 服务 =================
+HOST = _env("MONITOR_HOST", "127.0.0.1")          # 仅回环监听，nginx 反代
+PORT = _env_int("MONITOR_PORT", 8898)
+MOCK = _env_bool("MONITOR_MOCK", True)            # 本地开发默认 mock；cloud 部署 MONITOR_MOCK=0
+DEBUG = _env_bool("MONITOR_DEBUG", False)
+VERSION = "0.1.0"
+
+# ================= 监控节点（多云预留） =================
+NODE_ID = _env("MONITOR_NODE_ID", "cloud-1")
+DEFAULT_NODES = [
+    {"id": "cloud-1", "name": "cloud-1", "role": "primary",
+     "public_ip": "124.221.190.237", "enabled": True},
+]
+NODES = _env_json("MONITOR_NODES", DEFAULT_NODES)
+
+# ================= 数据源（敏感项 env 注入） =================
+# frps dashboard（127.0.0.1:7500，basic auth；frps.toml 中的账号密码）
+FRPS_URL = _env("MONITOR_FRPS_URL", "http://127.0.0.1:7500")
+FRPS_USER = _env("MONITOR_FRPS_USER", "admin")
+FRPS_PASS = _env("MONITOR_FRPS_PASS", "")
+FRPS_TIMEOUT = _env_float("MONITOR_FRPS_TIMEOUT", 5.0)
+
+# 既有 8899 frp 面板（只读消费；API_TOKEN 经 env 注入）
+LEGACY_STATUS_URL = _env("MONITOR_LEGACY_STATUS_URL", "http://127.0.0.1:8899/api/status")
+LEGACY_TOKEN = _env("MONITOR_LEGACY_TOKEN", "")
+
+# headscale 控制面
+HEADSCALE_METRICS_URL = _env("MONITOR_HEADSCALE_METRICS_URL", "http://127.0.0.1:9090/metrics")
+HEADSCALE_TCP_HOST = _env("MONITOR_HEADSCALE_TCP_HOST", "127.0.0.1")
+HEADSCALE_TCP_PORT = _env_int("MONITOR_HEADSCALE_TCP_PORT", 8080)
+HEADSCALE_DERP_REGION = _env_int("MONITOR_HEADSCALE_DERP_REGION", 999)
+
+# 证书扫描（/etc/letsencrypt/live 目录 700，经 sudoers 白名单 openssl 读取）
+CERT_DOMAINS = _env_json("MONITOR_CERT_DOMAINS",
+                         ["dc-sy.cn", "headscale.dc-sy.cn", "monitor.dc-sy.cn"])
+LETSENCRYPT_LIVE = Path(_env("MONITOR_LETSENCRYPT_LIVE", "/etc/letsencrypt/live"))
+
+# 探测对（F4 多云兜底雏形；cloud-2 接入后补对等探测）
+DEFAULT_PROBES = [
+    {"name": "ali-dns", "kind": "icmp", "target": "223.5.5.5"},
+    {"name": "cloudflare-dns", "kind": "icmp", "target": "1.1.1.1"},
+    {"name": "public-https", "kind": "http", "target": "https://example.com"},
+    {"name": "dns-resolve", "kind": "dns", "target": "example.com"},
+    {"name": "cloud2-443", "kind": "tcp", "target": "2.2.2.2", "port": 443},
+]
+PROBES = _env_json("MONITOR_PROBES", DEFAULT_PROBES)
+
+# tailscale HostName ↔ 8899 device_id 对照（可选，缺失不阻塞）
+DEVICE_MAP = _env_json("MONITOR_DEVICE_MAP", {
+    "vm-0-12-ubuntu": "cloud-server",
+    "dc-desktop": "desktop",
+    "oppo-pad-mini": "laptop",
+})
+
+# ================= 采集周期（秒） =================
+INTERVALS = {
+    "frp": _env_int("MONITOR_INTERVAL_FRP", 30),
+    "tailscale": _env_int("MONITOR_INTERVAL_TAILSCALE", 30),
+    "ts_ping": _env_int("MONITOR_INTERVAL_TS_PING", 60),   # ping 轮巡周期（状态 30s 每轮）
+    "headscale": _env_int("MONITOR_INTERVAL_HEADSCALE", 30),
+    "system": _env_int("MONITOR_INTERVAL_SYSTEM", 30),
+    "network": _env_int("MONITOR_INTERVAL_NETWORK", 60),
+    "certs": _env_int("MONITOR_INTERVAL_CERTS", 3600),
+}
+# tailscale ping 语义（评审 F5/E3/E4）
+PING_PACKETS = _env_int("MONITOR_PING_PACKETS", 3)          # 每节点 3 包取中位/最小
+PING_TIMEOUT = _env_float("MONITOR_PING_TIMEOUT", 8.0)      # 单包超时（秒）
+PING_CONCURRENCY = _env_int("MONITOR_PING_CONCURRENCY", 2)  # asyncio.Semaphore 硬限并发
+PING_TIMEOUT_DEBOUNCE_ROUNDS = _env_int("MONITOR_PING_DEBOUNCE_ROUNDS", 3)  # 连续 3 轮防抖
+MANUAL_PING_RATELIMIT_S = _env_float("MONITOR_MANUAL_PING_RATELIMIT_S", 5.0)
+STEP_TIMEOUT = _env_float("MONITOR_STEP_TIMEOUT", 10.0)     # 每步操作强制超时（评审 B）
+
+# ================= 阈值默认（集中在此） =================
+THRESHOLDS = {
+    "ts_latency_warn_ms": _env_float("MONITOR_THRESHOLD_TS_LATENCY_WARN", 200),
+    "ts_latency_crit_ms": _env_float("MONITOR_THRESHOLD_TS_LATENCY_CRIT", 500),
+    "packet_loss_warn_pct": _env_float("MONITOR_THRESHOLD_PACKET_LOSS_WARN", 2),
+    "packet_loss_crit_pct": _env_float("MONITOR_THRESHOLD_PACKET_LOSS_CRIT", 5),
+    "cert_warn_days": _env_int("MONITOR_THRESHOLD_CERT_WARN_DAYS", 30),
+    "cert_crit_days": _env_int("MONITOR_THRESHOLD_CERT_CRIT_DAYS", 7),
+    "disk_warn_pct": _env_float("MONITOR_THRESHOLD_DISK_WARN", 85),
+    "disk_crit_pct": _env_float("MONITOR_THRESHOLD_DISK_CRIT", 92),
+}
+ALERT_COOLDOWN_S = _env_float("MONITOR_ALERT_COOLDOWN_S", 1800)   # 同类告警 30min 冷却
+NETWORK_PROBE_ALERT = _env_bool("MONITOR_NETWORK_PROBE_ALERT", False)  # 探测告警默认关
+
+# ================= 数据库 =================
+DB_PATH = Path(_env("MONITOR_DB_PATH", str(BASE_DIR / "data" / "monitor.db")))
+SAMPLE_RETENTION_DAYS = _env_int("MONITOR_SAMPLE_RETENTION_DAYS", 30)
+ALERT_RETENTION_DAYS = _env_int("MONITOR_ALERT_RETENTION_DAYS", 90)
+CLEANUP_INTERVAL_S = _env_int("MONITOR_CLEANUP_INTERVAL_S", 3600)   # 每小时清理+checkpoint
+
+# ================= 命令（sudoers 白名单：deploy/sudoers.monitor） =================
+# 真实模式默认经 sudo -n 提权；mock 模式不走系统命令
+SUDO = _env_bool("MONITOR_SUDO", not MOCK)
+TAILSCALE_CMD = _env("MONITOR_TAILSCALE_CMD", "tailscale")
+HEADSCALE_CMD = _env("MONITOR_HEADSCALE_CMD", "headscale")
+PING_CMD = _env("MONITOR_PING_CMD", "ping")
+
+# ================= ingest（二期预留，默认 404） =================
+INGEST_ENABLED = _env_bool("MONITOR_INGEST_ENABLED", False)
+INGEST_TOKEN = _env("MONITOR_INGEST_TOKEN", "")
+
+# ================= 静态资源 =================
+WEB_DIR = BASE_DIR / "web"

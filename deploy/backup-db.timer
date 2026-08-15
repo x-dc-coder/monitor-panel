@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily backup timer for monitor-panel
+
+[Timer]
+# 每日 03:15（避开采集高峰与 WAL checkpoint 时段）
+OnCalendar=*-*-* 03:15:00
+Persistent=true
+Unit=backup-db.service
+
+[Install]
+WantedBy=timers.target

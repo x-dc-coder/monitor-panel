@@ -1,0 +1,26 @@
+[Unit]
+Description=monitor.dc-sy.cn unified monitoring panel (127.0.0.1:8898)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 专用用户 monitor + sudoers 白名单（评审 C5：不复制 8899 的 root 运行模式）
+User=monitor
+Group=monitor
+WorkingDirectory=/opt/monitor-panel/current
+# .env 可选（不存在时忽略），敏感项 env 注入 + 文件 600
+EnvironmentFile=-/opt/monitor-panel/current/.env
+ExecStart=/opt/monitor-panel/current/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8898
+Restart=on-failure
+RestartSec=5
+# 防重启风暴（评审 C4/E15）
+StartLimitIntervalSec=300
+StartLimitBurst=5
+NoNewPrivileges=true
+PrivateTmp=true
+# 只读进程加固（SQLite 写 data/ 已含；若需写日志目录再调整）
+ReadWritePaths=/opt/monitor-panel/current/data
+
+[Install]
+WantedBy=multi-user.target

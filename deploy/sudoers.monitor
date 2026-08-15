@@ -1,0 +1,18 @@
+# monitor 用户 sudoers NOPASSWD 白名单（评审 C5/F6）
+# 安装: sudo install -m 440 -o root -g root deploy/sudoers.monitor /etc/sudoers.d/monitor-panel
+# 校验: sudo visudo -c -f deploy/sudoers.monitor
+#
+# 仅放行 5 类只读命令；tailscale ping 目标在 Python 侧正则校验
+# （^[0-9a-fA-F:.\-A-Za-z_]+$），exec 走参数列表不经 shell，防注入。
+monitor ALL=(root) NOPASSWD: /usr/bin/tailscale status --json, \
+  /usr/bin/tailscale ping *, \
+  /usr/bin/headscale nodes list -o json, \
+  /bin/ping -c 4 *, \
+  /usr/bin/openssl x509 -in /etc/letsencrypt/live/*/cert.pem -noout -enddate
+
+# 说明（对应技术方案 §6 步骤 6）：
+# - tailscale/headscale CLI 走 /usr/bin 绝对路径（which 实测）
+# - ICMP 探测（F7）依赖 ping 的 cap_net_raw（setuid 或 sudo 承担）
+# - /etc/letsencrypt/live 目录 700（root only）→ 白名单 openssl 只读解析证书
+# - 若实测 tailscaled.sock 权限允许普通用户直连（当前 666），
+#   可移除 tailscale 两条白名单（以实测为准）

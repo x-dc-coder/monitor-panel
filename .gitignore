@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 敏感配置（不入 git，权限 600）
+.env
+
+# 数据与运行产物
+data/
+*.db
+*.db-wal
+*.db-shm
+backups/
+releases/
+*.log
+logs/
+
+# 部署中间产物
+deploy/.snapshots/
+
+# 系统
+.DS_Store
