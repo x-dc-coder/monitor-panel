@@ -74,6 +74,9 @@ class SystemCollector(Collector):
             for part in __import__("psutil").disk_partitions(all=False):
                 if part.fstype in ("squashfs", "tmpfs", "devtmpfs", "overlay"):
                     continue
+                # 过滤 PrivateTmp/绑定挂载等伪分区：只保留根挂载与真实磁盘设备
+                if part.mountpoint not in ("/",) and not (part.device or "").startswith("/dev/"):
+                    continue
                 try:
                     usage = shutil.disk_usage(part.mountpoint)
                     pct = round(usage.used / usage.total * 100, 1) if usage.total else 0.0

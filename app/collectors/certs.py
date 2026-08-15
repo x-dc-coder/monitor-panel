@@ -16,7 +16,7 @@ from app.collectors.base import Collector, CollectorError, CollectorResult, run_
 
 log = logging.getLogger(__name__)
 
-_ENDDATE_RE = re.compile(r"notAfter=(\S+)")
+_ENDDATE_RE = re.compile(r"notAfter=(\w{3}\s+\d+\s+[\d:]+\s+\d+\s+\w{3})")
 
 
 def cert_status(days_left: float) -> str:
@@ -71,13 +71,20 @@ class CertsCollector(Collector):
             return None
         not_after = m.group(1)
         try:
-            dt = datetime.fromisoformat(not_after.replace("Z", "+00:00"))
+            # openssl 默认输出：'Nov  2 14:47:45 2026 GMT'（非 ISO）
+            dt = datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z")
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
             days_left = (dt - datetime.now(timezone.utc)).total_seconds() / 86400
         except ValueError:
-            log.warning("certs: bad date %r for %s", not_after, path)
-            return None
+            try:
+                dt = datetime.fromisoformat(not_after.replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                days_left = (dt - datetime.now(timezone.utc)).total_seconds() / 86400
+            except ValueError:
+                log.warning("certs: bad date %r for %s", not_after, path)
+                return None
         return {"domain": domain, "days_left": round(days_left, 1),
                 "not_after": not_after, "status": cert_status(days_left),
                 "path": str(path)}
