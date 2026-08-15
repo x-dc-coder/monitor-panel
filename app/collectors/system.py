@@ -74,8 +74,12 @@ class SystemCollector(Collector):
             for part in __import__("psutil").disk_partitions(all=False):
                 if part.fstype in ("squashfs", "tmpfs", "devtmpfs", "overlay"):
                     continue
-                # 过滤 PrivateTmp/绑定挂载等伪分区：只保留根挂载与真实磁盘设备
-                if part.mountpoint not in ("/",) and not (part.device or "").startswith("/dev/"):
+                # 过滤伪挂载：PrivateTmp(/tmp /var/tmp) 与 ReadWritePaths(data) 的
+                # 绑定挂载 device 同为 /dev/vda2，但非独立分区——只保留根挂载与
+                # 明确非绑定路径的真实分区
+                if part.mountpoint != "/" and (
+                        part.mountpoint.startswith(("/tmp", "/var/tmp", "/opt/")) or
+                        part.mountpoint.startswith("/run/")):
                     continue
                 try:
                     usage = shutil.disk_usage(part.mountpoint)
