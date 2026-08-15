@@ -9,8 +9,9 @@ Type=simple
 User=monitor
 Group=monitor
 WorkingDirectory=/opt/monitor-panel/current
-# .env 可选（不存在时忽略），敏感项 env 注入 + 文件 600
-EnvironmentFile=-/opt/monitor-panel/current/.env
+# .env 在 current 之外的固定路径（/opt/monitor-panel/env），避免 release 切换时丢失；
+# 敏感项 env 注入 + 文件 600
+EnvironmentFile=-/opt/monitor-panel/env
 ExecStart=/opt/monitor-panel/current/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8898
 Restart=on-failure
 RestartSec=5

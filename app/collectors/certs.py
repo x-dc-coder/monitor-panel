@@ -16,7 +16,7 @@ from app.collectors.base import Collector, CollectorError, CollectorResult, run_
 
 log = logging.getLogger(__name__)
 
-_ENDDATE_RE = re.compile(r"notAfter=(S+)")
+_ENDDATE_RE = re.compile(r"notAfter=(\S+)")
 
 
 def cert_status(days_left: float) -> str:

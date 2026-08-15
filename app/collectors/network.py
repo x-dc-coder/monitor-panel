@@ -18,8 +18,8 @@ from app.collectors.base import Collector, CollectorError, CollectorResult, run_
 
 log = logging.getLogger(__name__)
 
-_ICMP_AVG_RE = re.compile(r"=s*([d.]+)/([d.]+)/([d.]+)")
-_ICMP_LOSS_RE = re.compile(r"([d.]+)%s+packet loss")
+_ICMP_AVG_RE = re.compile(r"=\s*(\d+(?:\.\d+)?)/(\d+(?:\.\d+)?)/(\d+(?:\.\d+)?)")
+_ICMP_LOSS_RE = re.compile(r"(\d+(?:\.\d+)?)%\s+packet loss")
 
 
 class NetworkCollector(Collector):
