@@ -113,11 +113,19 @@ class FrpCollector(Collector):
         }
 
     async def _fetch_tunnels(self, client: httpx.AsyncClient) -> tuple[list[dict], str]:
-        """/api/proxy/all 先探测一次；404/400/405 → per-type 聚合（评审 F2/E5）。"""
+        """/api/proxy/all 先探测一次；返回空/404/400/405 → per-type 聚合。
+
+        frp 0.70 实测：/api/proxy/all 返回 200 但 proxies 恒为空（端点失效），
+        必须用 per-type 端点（评审 F2/E5）。
+        """
         if self._use_proxy_all is None:
             try:
                 r = await client.get("/api/proxy/all", timeout=3)
-                self._use_proxy_all = r.status_code == 200
+                if r.status_code == 200:
+                    data = r.json()
+                    self._use_proxy_all = bool(data.get("proxies"))
+                else:
+                    self._use_proxy_all = False
             except Exception:  # noqa: BLE001
                 self._use_proxy_all = False
         tunnels: list[dict] = []

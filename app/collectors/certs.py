@@ -54,9 +54,6 @@ class CertsCollector(Collector):
     # ---------------- real ----------------
     async def _read_cert(self, domain: str) -> dict | None:
         path = config.LETSENCRYPT_LIVE / domain / "cert.pem"
-        if not path.exists():
-            log.warning("certs: %s missing, skip", path)
-            return None
         try:
             rc, out, err = await run_cmd(
                 ["openssl", "x509", "-in", str(path), "-noout", "-enddate"],
@@ -65,6 +62,7 @@ class CertsCollector(Collector):
             log.warning("certs: read %s failed: %s", path, exc)
             return None
         if rc != 0:
+            # 证书不存在/不可达（目录 700 root only，monitor 无法 stat）
             log.warning("certs: openssl %s rc=%d: %s", path, rc, err.strip()[:120])
             return None
         m = _ENDDATE_RE.search(out)

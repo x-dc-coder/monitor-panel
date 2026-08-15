@@ -26,7 +26,7 @@ _METRIC_KEYS = {
     "headscale_mapresponse_generated_total": "mapresponse_generated",
     "headscale_mapresponse_sent_total": "mapresponse_sent",
 }
-_LINE_RE = re.compile(r"^(S+)s+([d.eE+-]+)")
+_LINE_RE = re.compile(r"^(\S+)\s+([\d.eE+-]+)")
 
 
 class HeadscaleCollector(Collector):
