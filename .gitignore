@@ -22,3 +22,4 @@ deploy/.snapshots/
 
 # 系统
 .DS_Store
+.pytest_cache/
