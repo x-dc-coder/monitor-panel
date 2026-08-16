@@ -116,8 +116,10 @@ class NetworkCollector(Collector):
     async def _probe_dns(self, p: dict) -> dict:
         started = time.monotonic()
         try:
+            # Python 3.10+: asyncio.getaddrinfo 已移除，用 loop.getaddrinfo
+            loop = asyncio.get_running_loop()
             infos = await asyncio.wait_for(
-                asyncio.getaddrinfo(p["target"], 443), timeout=8.0)
+                loop.getaddrinfo(p["target"], 443), timeout=8.0)
             latency = (time.monotonic() - started) * 1000
             return {"name": p["name"], "kind": "dns", "target": p["target"],
                     "latency_ms": round(latency, 1), "loss_percent": 0.0,

@@ -167,19 +167,21 @@ class TailscaleCollector(Collector):
             # 也返回 rc=1，以输出中是否含 pong 为准（不能只看退出码）
             for m in _PONG_RE.finditer(out):
                 samples.append(float(m.group(4)))
-            if samples:
-                errors = max(0, config.PING_PACKETS - len(samples))
-            else:
+            if not samples:
                 errors = config.PING_PACKETS
         except CollectorError:
             errors = config.PING_PACKETS
         ts = time.time()
         if samples:
+            # 丢包率修复（2026-08-16）：tailscale ping 的 pong 数量可能少于请求数
+            # （前几包直连建立/慢响应正常），只要拿到 ≥1 个 pong 即视为链路可达，
+            # 丢包率按「完全无响应」判定（0% 或 100%），避免 1/3=33% 之类的误报
+            loss = 0.0 if len(samples) > 0 else 100.0
             return {"device_id": device_id, "hostname": hostname,
                     "tailscale_ip": ip, "latency_ms": round(statistics.median(samples), 1),
                     "latency_min_ms": round(min(samples), 1),
                     "path": "derp" if "DERP" in out else "direct",
-                    "loss_percent": round(100.0 * errors / config.PING_PACKETS, 1),
+                    "loss_percent": loss,
                     "timed_out": False, "ts": ts, "packets": samples}
         return {"device_id": device_id, "hostname": hostname, "tailscale_ip": ip,
                 "latency_ms": None, "path": "unknown", "loss_percent": 100.0,
