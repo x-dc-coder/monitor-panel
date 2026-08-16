@@ -114,7 +114,11 @@ class TailscaleCollector(Collector):
     @staticmethod
     def _parse_last_seen(raw: str | None) -> float | None:
         if not raw or not _LAST_SEEN_RE.match(raw):
-            return None  # 在线时 Go 零值 0001-01-01T00:00:00Z（t1 B2 解析坑）
+            return None
+        # 在线设备 LastSeen 为 Go 零值 0001-01-01T00:00:00Z（t1 B2 解析坑）：
+        # 解析成功但返回公元 1 年 → 负时间戳，必须显式排除
+        if raw.startswith("0001-01-01"):
+            return None
         try:
             from datetime import datetime, timezone
             dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
@@ -203,6 +207,12 @@ class TailscaleCollector(Collector):
         for key, p in peers.items():
             self._devices.append(self._norm_device(key, p))
         self._status_ts = ts
+
+        # 清理缓存中的失效设备（防止旧版本遗留的 Self 超时记录污染 API）
+        current_ids = {d["device_id"] for d in self._devices}
+        for stale in [k for k in self._ping_cache if k not in current_ids]:
+            self._ping_cache.pop(stale, None)
+            self._next_ping.pop(stale, None)
 
         # ping 轮巡：到期设备才 ping（60s/台，错峰启动）
         now_mono = time.monotonic()
