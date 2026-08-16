@@ -204,13 +204,16 @@ class TailscaleCollector(Collector):
         now_mono = time.monotonic()
         n = max(1, len(self._devices) - 1)
         due: list[dict] = []
-        for dev in self._devices[1:]:
+        for idx, dev in enumerate(self._devices[1:]):
             last = self._next_ping.get(dev["device_id"])
-            if last is None:  # 首轮错峰：index * 周期/n
-                last = now_mono + (self._devices.index(dev) - 1) *                     config.INTERVALS["ts_ping"] / n
-            if now_mono >= last or not dev["online"]:
-                if not dev["online"]:
-                    continue  # 离线不 ping（评审 E3）
+            if not dev["online"]:
+                continue  # 离线不 ping（评审 E3）
+            if last is None:
+                # 首轮：立即 ping（同轮内用 idx/n 错开首包，不推迟到未来）
+                due.append(dev)
+                self._next_ping[dev["device_id"]] = now_mono + (idx / n) * \
+                    config.INTERVALS["ts_ping"]
+            elif now_mono >= last:
                 due.append(dev)
                 self._next_ping[dev["device_id"]] = now_mono + config.INTERVALS["ts_ping"]
         if due:
