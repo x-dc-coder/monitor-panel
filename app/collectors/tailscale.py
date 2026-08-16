@@ -125,7 +125,9 @@ class TailscaleCollector(Collector):
     def _norm_device(self, key: str, p: dict, is_self: bool = False) -> dict:
         ips = p.get("TailscaleIPs") or []
         v4 = next((ip for ip in ips if ip.startswith("100.64.")), None) or             next(iter(ips), None)
-        online = p.get("Online", False) if not is_self else             (p.get("BackendState") == "Running")
+        # Self 对象无 BackendState（在 status --json 顶层），但 Self.Online 存在；
+        # 统一用 Online 字段判定（修复 Self 节点恒为 offline 的 bug）
+        online = bool(p.get("Online", False))
         relay = None if is_self else (p.get("Relay") or
                                       ("direct" if p.get("CurAddr") else None))
         last_seen = self._parse_last_seen(p.get("LastSeen"))
