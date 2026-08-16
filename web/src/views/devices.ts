@@ -28,8 +28,9 @@ export function renderDevices(): string {
           '<td><button type="button" class="tbtn ping-btn" data-id="' + esc(d.device_id) +
           '" data-ip="' + esc(d.tailscale_ip) + '" data-n="' + esc(d.name) + '">[ping]</button></td></tr>').join(""),
         "暂无设备 · 等待采集")) +
-    (S.pingLog || '<div class="ln"><span class="ps">$</span> ' +
-    '<span class="out">tailscale ping &lt;ip&gt; — 点击 [ping] 执行<span class="caret"></span></span></div>') +
+    (S.pingLog ? '<div class="tout" id="ping-out">' + S.pingLog + '</div>'
+      : '<div class="tout" id="ping-out"><div class="ln"><span class="ps">$</span> ' +
+        '<span class="out">tailscale ping &lt;ip&gt; — 点击 [ping] 执行<span class="caret"></span></span></div></div>') +
     '</div>';
 }
 
