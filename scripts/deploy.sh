@@ -75,7 +75,14 @@ rsync -az --delete \
   "$LOCAL_DIR/" "$HOST:$RELEASE/"
 
 echo "→ 远端依赖准备（uv 优先）"
-ssh "$HOST" "cd '$RELEASE' && if command -v uv >/dev/null 2>&1; then uv venv .venv && uv pip install -q -r requirements.txt; else python3 -m venv .venv && '$RELEASE'/.venv/bin/pip install -q -r requirements.txt; fi && chmod 600 .env 2>/dev/null || true"
+ssh "$HOST" "cd '$RELEASE' && if command -v uv >/dev/null 2>&1; then uv venv .venv && uv pip install -q -r requirements.txt; else python3 -m venv .venv && '$RELEASE'/.venv/bin/pip install -q -r requirements.txt; fi"
+
+# 运行态配置与数据（固定路径，不随 release 切换分叉）：
+# - .env: 复制到 release 内（代码读 BASE_DIR/.env），权威源 /opt/monitor-panel/env（systemd）
+# - data: 固定 /opt/monitor-panel/data（MONITOR_DB_PATH 指向，避免数据库随 release 分叉）
+ssh "$HOST" "sudo mkdir -p '$REMOTE_DIR/data' && sudo chown monitor:monitor '$REMOTE_DIR/data' && \
+  if [ -f '$REMOTE_DIR/env' ]; then sudo cp '$REMOTE_DIR/env' '$RELEASE/.env'; \
+  sudo chown monitor:monitor '$RELEASE/.env'; sudo chmod 600 '$RELEASE/.env'; fi"
 
 if switch_and_restart "$RELEASE"; then
   echo "=== 部署成功: $TS ==="
