@@ -146,25 +146,31 @@ class TailscaleCollector(Collector):
         }
 
     async def _do_ping(self, ip: str, hostname: str, device_id: str) -> dict:
-        """单设备连 ping N 包（Semaphore 限并发；超时 kill）。"""
+        """单设备 ping N 包（Semaphore 限并发；超时 kill）。
+
+        修复（2026-08-15）：tailscale ping 默认发 10 次或直到直连建立才停，
+        在无 TTY 的 asyncio pipe 环境下会持续运行导致超时。加 --c N 限制包数
+        （与 config.PING_PACKETS 一致），单次调用解析全部 pong。
+        """
         if not validate_ip_or_host(ip):
             raise CollectorError(f"invalid ping target: {ip!r}")
         samples: list[float] = []
         errors = 0
-        for _ in range(max(1, config.PING_PACKETS)):
-            try:
-                async with self._semaphore():
-                    rc, out, err = await run_cmd(
-                        [config.TAILSCALE_CMD, "ping", ip],
-                        sudo=config.SUDO, timeout=config.PING_TIMEOUT)
-                if rc == 0:
-                    m = _PONG_RE.search(out)
-                    if m:
-                        samples.append(float(m.group(4)))
-                        continue
-                errors += 1
-            except CollectorError:
-                errors += 1
+        try:
+            async with self._semaphore():
+                rc, out, err = await run_cmd(
+                    [config.TAILSCALE_CMD, "ping", "--c", str(max(1, config.PING_PACKETS)), ip],
+                    sudo=config.SUDO, timeout=config.PING_TIMEOUT * max(1, config.PING_PACKETS))
+            # 一次输出可能含多个 pong（--c N 连发）；实测 tailscale ping 成功
+            # 也返回 rc=1，以输出中是否含 pong 为准（不能只看退出码）
+            for m in _PONG_RE.finditer(out):
+                samples.append(float(m.group(4)))
+            if samples:
+                errors = max(0, config.PING_PACKETS - len(samples))
+            else:
+                errors = config.PING_PACKETS
+        except CollectorError:
+            errors = config.PING_PACKETS
         ts = time.time()
         if samples:
             return {"device_id": device_id, "hostname": hostname,

@@ -21,6 +21,8 @@ export const S: {
   healthz: HealthzData | null;
   spark: SparkCache;
   cur: string;
+  /** 手动 ping 终端输出（全局，轮询重渲染不丢失） */
+  pingLog: string | null;
 } = {
   overview: null,
   devices: null,
@@ -31,6 +33,7 @@ export const S: {
   healthz: null,
   spark: { cpu: null, mem: null, frp: null, ts: null },
   cur: "overview",
+  pingLog: null,
 };
 
 export function setCur(v: string): void {

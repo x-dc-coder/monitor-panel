@@ -28,8 +28,9 @@ export function renderDevices(): string {
           '<td><button type="button" class="tbtn ping-btn" data-id="' + esc(d.device_id) +
           '" data-ip="' + esc(d.tailscale_ip) + '" data-n="' + esc(d.name) + '">[ping]</button></td></tr>').join(""),
         "暂无设备 · 等待采集")) +
-    '<div class="tout" id="ping-out"><div class="ln"><span class="ps">$</span> ' +
-    '<span class="out">tailscale ping &lt;ip&gt; — 点击 [ping] 执行<span class="caret"></span></span></div></div>';
+    (S.pingLog || '<div class="ln"><span class="ps">$</span> ' +
+    '<span class="out">tailscale ping &lt;ip&gt; — 点击 [ping] 执行<span class="caret"></span></span></div>') +
+    '</div>';
 }
 
 /** 绑定 [ping] 按钮（视图渲染后调用）；429 显示限流提示 */
@@ -44,20 +45,26 @@ export function bindPing(): void {
       btn.disabled = true;
       btn.textContent = "…";
       out.classList.add("show");
-      out.innerHTML = '<div class="ln"><span class="muted">' + nowTime() +
+      const cmdLine = '<div class="ln"><span class="muted">' + nowTime() +
         '</span> <span class="ps">$</span> <span class="out">sudo tailscale ping ' + esc(ip) + "</span></div>";
+      S.pingLog = cmdLine;
+      out.innerHTML = cmdLine;
       api<PingResult>("/api/devices/" + encodeURIComponent(id) + "/ping", { method: "POST" })
         .then((d) => {
-          out.innerHTML += '<div class="ln"><span class="ok2">pong from ' + esc(n) + " (" + esc(ip) +
+          const okLine = '<div class="ln"><span class="ok2">pong from ' + esc(n) + " (" + esc(ip) +
             ") via " + esc(d.path === "direct" ? "direct" : "DERP(headscale)") + " in " +
             fmtMs(d.latency_ms) + " ✓</span></div>" +
             '<div class="ln"><span class="out">loss ' + (d.loss_percent || 0) + "% · " +
             (d.mock ? "mock 数据" : "实时采集") + "</span></div>";
+          out.innerHTML += okLine;
+          S.pingLog = (S.pingLog || "") + okLine;
           btn.textContent = fmtMs(d.latency_ms);
         })
         .catch((e: Error) => {
-          out.innerHTML += '<div class="ln"><span class="err2">✕ ' + esc(e.message) +
+          const errLine = '<div class="ln"><span class="err2">✕ ' + esc(e.message) +
             "（限流 5s/设备）</span></div>";
+          out.innerHTML += errLine;
+          S.pingLog = (S.pingLog || "") + errLine;
           btn.textContent = "限流";
         })
         .finally(() => {
