@@ -19,8 +19,10 @@ os.makedirs(OUT, exist_ok=True)
 TS = time.time()
 NODE = "cloud-1"
 
-FRPS_AUTH = ("admin", "b60b6e6b6d930a7b")   # 取自 /etc/frp/frps.toml
-LEGACY_TOKEN = "4be2776c36c336d12e2f5bb857a39f5dff87e5acfd5b55fe"  # 8899 API_TOKEN
+# 凭据经环境变量注入（与 .env 同源），不落代码仓库
+FRPS_AUTH = (os.environ.get("MONITOR_FRPS_USER", "admin"),
+             os.environ.get("MONITOR_FRPS_PASS", ""))   # 取自 /etc/frp/frps.toml
+LEGACY_TOKEN = os.environ.get("MONITOR_LEGACY_TOKEN", "")  # 8899 API_TOKEN
 CERT_DOMAINS = ["dc-sy.cn", "headscale.dc-sy.cn", "monitor.dc-sy.cn"]
 
 
