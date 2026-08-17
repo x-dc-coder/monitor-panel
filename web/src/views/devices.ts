@@ -1,37 +1,62 @@
-/** 设备视图：设备表 + tailscale ping 终端输出交互。 */
+/** 设备视图：通用 DataTable（分页 + 状态/OS 筛选 + 按状态聚合）+ tailscale ping 终端输出交互。 */
 import { fmtMs, nowTime } from "../fmt";
 import { S } from "../state";
 import { api } from "../api";
-import type { PingResult } from "../types";
-import { esc, pageHead, st, tb, win } from "../ui";
+import type { DeviceRow, PingResult } from "../types";
+import { esc, pageHead, st, win } from "../ui";
+import { table, type TableDef } from "../table";
+
+const TABLE_ID = "devices";
 
 function statusLevel(s: string): "ok" | "warn" | "crit" | "off" {
   return s === "ok" ? "ok" : s === "warn" ? "warn" : s === "crit" ? "crit" : "off";
 }
 
+function statusCell(d: DeviceRow): string {
+  const lvl = statusLevel(d.status || (d.online ? "ok" : "off"));
+  const txt = d.online ? (d.status === "degraded" ? "degraded" : "online") : "offline";
+  return st(lvl, txt);
+}
+
+function latCell(d: DeviceRow): string {
+  if (d.timed_out) return '<span style="color:var(--warn)">超时</span>';
+  return '<span class="num">' + fmtMs(d.latency_ms) + "</span>";
+}
+
+function pingCell(d: DeviceRow): string {
+  return '<button type="button" class="tbtn ping-btn" data-id="' + esc(d.device_id) +
+    '" data-ip="' + esc(d.tailscale_ip) + '" data-n="' + esc(d.name) + '">[ping]</button>';
+}
+
+const def: TableDef = {
+  cols: [
+    { key: "name", label: "HOST" },
+    { key: "tailscale_ip", label: "IP", fmt: (d) => '<span class="muted">' + esc(d.tailscale_ip) + "</span>" },
+    { key: "os", label: "OS", filterable: true, fmt: (d) => esc(d.os || "—") },
+    { key: "status", label: "状态", filterable: true, fmt: statusCell },
+    {
+      key: "relay", label: "路径",
+      fmt: (d) => '<span class="dim2">' + (d.relay ? "DERP(" + esc(d.relay) + ")" : "直连") + "</span>",
+    },
+    { key: "latency_ms", label: "延迟(中位)", fmt: latCell },
+    { key: "mapped_8899", label: "8899", fmt: (d) => '<span class="muted">' + esc(d.mapped_8899 || "—") + "</span>" },
+    { key: "ping", label: "", fmt: pingCell },
+  ],
+  groupBy: "status",
+  emptyMsg: "暂无设备 · 等待采集",
+};
+
 export function renderDevices(): string {
   const devs = S.devices ? S.devices.devices : [];
   const online = devs.filter((d) => d.online).length;
   return pageHead("~/console/devices", "设备", online + " 在线",
-    "tailscale status --json && tailscale ping <ip> --c 3") +
+    "tailscale status --json && tailscale ping <ip> --c 3 · 表格支持状态/OS 筛选与分页") +
     win("设备清单 · devices", devs.length + " 台 · ping 轮巡 60s/台 · Semaphore(2)",
-      tb(["HOST", "IP", "OS", "状态", "路径", "延迟(中位)", "8899", ""],
-        devs.map((d) =>
-          '<tr data-dev="' + esc(d.device_id) + '"><td>' + esc(d.name) +
-          '</td><td class="muted">' + esc(d.tailscale_ip) + "</td><td>" + esc(d.os || "—") +
-          "</td><td>" + st(statusLevel(d.status || (d.online ? "ok" : "off")),
-            d.online ? (d.status === "degraded" ? "degraded" : "online") : "offline") +
-          '</td><td class="dim2">' + (d.relay ? "DERP(" + esc(d.relay) + ")" : "直连") +
-          '</td><td class="num">' + (d.timed_out
-            ? '<span style="color:var(--warn)">超时</span>' : fmtMs(d.latency_ms)) +
-          '</td><td class="muted">' + esc(d.mapped_8899 || "—") + "</td>" +
-          '<td><button type="button" class="tbtn ping-btn" data-id="' + esc(d.device_id) +
-          '" data-ip="' + esc(d.tailscale_ip) + '" data-n="' + esc(d.name) + '">[ping]</button></td></tr>').join(""),
-        "暂无设备 · 等待采集")) +
+      table(def, devs, TABLE_ID)) +
     (S.pingLog ? '<div class="tout" id="ping-out">' + S.pingLog + '</div>'
       : '<div class="tout" id="ping-out"><div class="ln"><span class="ps">$</span> ' +
         '<span class="out">tailscale ping &lt;ip&gt; — 点击 [ping] 执行<span class="caret"></span></span></div></div>') +
-    '</div>';
+    "</div>";
 }
 
 /** 绑定 [ping] 按钮（视图渲染后调用）；429 显示限流提示 */

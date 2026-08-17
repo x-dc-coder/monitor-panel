@@ -222,3 +222,32 @@ select.tbtn option{background:var(--bg2);color:var(--fg)}
 /* 服务直达链接可达性标记 */
 .badge{display:inline-block;padding:1px 6px;border-radius:8px;font-size:10px;background:rgba(128,128,128,.15);color:var(--faint);border:1px solid rgba(128,128,128,.25);white-space:nowrap}
 .badge[title]{cursor:help}
+
+/* ================= 通用 DataTable：筛选条 / 聚合 / 分页 ================= */
+.twrap{display:flex;flex-direction:column;gap:8px}
+.tbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 10px;
+  background:var(--bg3);border:1px solid var(--line);border-radius:2px}
+.tfilter{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--dim)}
+.tfilter select{font-family:inherit;font-size:11px;color:var(--fg);background:var(--bg2);
+  border:1px solid var(--line2);border-radius:2px;padding:2px 4px;cursor:pointer}
+.tfilter select:focus{outline:2px solid var(--cy);outline-offset:1px}
+.tcnt{margin-left:auto;font-size:10.5px;color:var(--faint)}
+.tagg{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;
+  color:var(--dim);padding:6px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:2px}
+.tagg .muted{color:var(--faint)}
+.tag{font-family:inherit;font-size:10.5px;color:var(--dim);background:var(--bg3);
+  border:1px solid var(--line2);border-radius:10px;padding:1px 9px;cursor:pointer}
+.tag b{color:var(--cy);font-weight:600}
+.tag:hover{border-color:var(--cy);color:var(--fg)}
+.tag.on{background:rgba(95,227,207,.12);border-color:var(--cy);color:var(--cy)}
+.tag.clear{color:var(--faint);border-style:dashed}
+.tag.clear:hover{color:var(--amber);border-color:var(--amber)}
+.tpager{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 2px;font-size:11px;color:var(--dim)}
+.pg{font-family:inherit;font-size:11px;color:var(--dim);background:var(--bg3);
+  border:1px solid var(--line2);border-radius:2px;padding:2px 10px;cursor:pointer}
+.pg:hover:not([disabled]){border-color:var(--cy);color:var(--cy)}
+.pg[disabled]{opacity:.35;cursor:default}
+.pg-info b{color:var(--fg);font-weight:600}
+.pg-size{margin-left:auto;display:inline-flex;align-items:center;gap:6px}
+.pg-size select{font-family:inherit;font-size:11px;color:var(--fg);background:var(--bg2);
+  border:1px solid var(--line2);border-radius:2px;padding:2px 4px;cursor:pointer}

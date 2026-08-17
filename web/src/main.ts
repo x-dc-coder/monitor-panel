@@ -122,9 +122,10 @@ async function refreshSpark(): Promise<void> {
 /* ---------------- 路由与装配 ---------------- */
 function bindView(v: string): void {
   if (v === "devices") void import("./views/devices").then((m) => m.bindPing());
-  if (v === "alerts") void import("./views/alerts").then((m) => m.bindAlertFilter());
   if (v === "links") void import("./views/links").then((m) => m.bindLinks());
   if (v === "probes") void import("./views/probes").then((m) => m.renderProbeOut());
+  // 通用表格交互（分页/筛选/分组）——各视图渲染后挂载
+  void import("./table").then((m) => m.bindTableForView(v));
 }
 
 function render(): void {
@@ -137,6 +138,9 @@ function render(): void {
   bindView(v);
   el.scrollTop = 0;
 }
+
+// 表格内交互（筛选/分页/分组）触发重渲染
+document.addEventListener("table-change", () => render());
 
 window.addEventListener("hashchange", render);
 

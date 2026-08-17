@@ -1,8 +1,12 @@
-/** 服务台账视图：端口约定驱动的自动发现 + 探活状态（issue #2 方案 C）。 */
+/** 服务台账视图：端口约定驱动的自动发现 + 探活状态（issue #2 方案 C）。
+ *  使用通用 DataTable：分页 + 列头筛选（设备/协议/状态）+ 按设备聚合。 */
 import { fmtMs } from "../fmt";
 import { S } from "../state";
 import type { ServiceRow } from "../types";
-import { esc, pageHead, st, tb, win } from "../ui";
+import { esc, pageHead, st, win } from "../ui";
+import { table, type TableDef } from "../table";
+
+const TABLE_ID = "services";
 
 /** 链接可达性分级：公网域名可点；内网/回环只展示标记（浏览器无法直达）。 */
 function isPrivateHost(host: string): boolean {
@@ -36,6 +40,37 @@ function linkCell(r: ServiceRow): string {
   return ipPort;
 }
 
+function statusTxt(r: ServiceRow): string {
+  if (r.status === "open") return st("ok", "在线");
+  if (r.status === "closed") return st("crit", "离线");
+  return st("off", "未知");
+}
+
+const def: TableDef = {
+  cols: [
+    { key: "device_name", label: "设备", filterable: true },
+    { key: "port", label: "端口", fmt: (r) => '<span class="num">' + r.port + "</span>" },
+    {
+      key: "name", label: "名称",
+      fmt: (r) => esc(r.name || "—") +
+        (r.name && r.auto_name && r.name !== r.auto_name
+          ? '<div class="muted sm">' + esc(r.auto_name) + "</div>" : ""),
+    },
+    {
+      key: "protocol", label: "协议", filterable: true,
+      fmt: (r) => esc(r.protocol || "tcp") + (r.http_status ? " " + r.http_status : ""),
+    },
+    { key: "status", label: "状态", filterable: true, fmt: statusTxt },
+    {
+      key: "latency_ms", label: "延迟",
+      fmt: (r) => (r.status === "open" ? '<span class="num">' + fmtMs(r.latency_ms) + "</span>" : "—"),
+    },
+    { key: "url", label: "直达", fmt: linkCell },
+  ],
+  groupBy: "device_name",
+  emptyMsg: "暂无服务 · 等待采集（首轮扫描后出现）",
+};
+
 export function renderServices(): string {
   const d = S.services;
   const svc = d ? d.services : [];
@@ -44,22 +79,8 @@ export function renderServices(): string {
   const head = "服务台账 · 约定区 " + range[0] + "–" + range[1] +
     " · 在线 " + sum.open + "/" + sum.total + " · manual " + sum.manual;
   return pageHead("~/console/services", "服务台账", "端口约定驱动自动发现 · 60s",
-    "docs/05 端口约定：自定义服务统一绑定 " + range[0] + "–" + range[1] + " · 部署即登记") +
-    win("已发现服务", head,
-      tb(["设备", "端口", "名称", "协议", "状态", "延迟", "直达"],        svc.map((r) => {
-          const statusTxt = r.status === "open" ? "在线" :
-            r.status === "closed" ? "离线" : "未知";
-          return "<tr><td>" + esc(r.device_name || r.device_id) +
-            '</td><td class="num">' + r.port +
-            "</td><td>" + esc(r.name || "—") +
-            (r.name && r.auto_name && r.name !== r.auto_name
-              ? '<div class="muted sm">' + esc(r.auto_name) + "</div>" : "") +
-            "</td><td>" + esc(r.protocol || "tcp") +
-            (r.http_status ? " " + r.http_status : "") +
-            "</td><td>" + st(r.status === "open" ? "ok" : r.status === "closed" ? "crit" : "off",
-              statusTxt) +
-            '</td><td class="num">' + (r.status === "open" ? fmtMs(r.latency_ms) : "—") +
-            "</td><td>" + linkCell(r) + "</td></tr>";
-        }).join(""), "暂无服务 · 等待采集（首轮扫描后出现）")) +
-    '<div class="legend">■ 自动发现约定区端口 · 连续 3 轮未开放置灰 · 公网直达可点，内网/回环仅标记</div>';
+    "docs/05 端口约定：自定义服务统一绑定 " + range[0] + "–" + range[1] + " · 部署即登记 · 表格支持筛选/分页") +
+    win("已发现服务", head, table(def, svc, TABLE_ID)) +
+    '<div class="legend">■ 自动发现约定区端口 · 连续 3 轮未开放置灰 · 公网直达可点，内网/回环仅标记 · ' +
+    "按设备/协议/状态筛选，点击聚合标签过滤</div>";
 }
