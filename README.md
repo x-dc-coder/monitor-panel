@@ -1,17 +1,22 @@
 # monitor.dc-sy.cn 统一监控面板 — 开发计划与任务书
 
-> 版本：v1.0 ｜ 日期：2026-08-15 ｜ 状态：**M1–M3 代码完成（2026-08-15），待 M4 部署上线**
-> 本文档是开发工作区的主指引；详细设计见 docs/ 下三份团队报告。
+> 版本：v1.2 ｜ 更新：2026-08-17 ｜ 状态：**M1–M5 大部分完成，线上运行中（release 20260817-132017）**
+> 本文档是开发工作区的主指引；详细设计见 docs/ 下六份团队报告。
 
-## 开发状态（2026-08-15 更新）
+## 开发状态（2026-08-17 更新）
 
 | 里程碑 | 状态 | 说明 |
 |---|---|---|
 | M1 骨架 | ✅ 完成 | 脚手架、config（env 注入）/constants（指标白名单）/db（WAL+PRAGMA）/scheduler（overrun+jitter+单调时钟）、/api/healthz、mock 采集器、单页框架 |
 | M2 数据源接入 | ✅ 完成 | frp（per-type 端点 + /api/proxy/all 探测 + 降级 8899）、tailscale（status+ping 轮巡，Semaphore(2)+超时 kill+3 包中位）、system（psutil+to_thread）、脱敏层 sanitize()；sudoers 白名单已备（deploy/） |
 | M3 面板完善 | ✅ 完成 | overview 聚合、设备表（device_map 对照）、隧道表、链路质量表、趋势图（降采样）、证书/headscale/网络探测、告警流、手动 ping（限流 5s/设备） |
-| M4 部署上线 | ⏳ 待执行 | 见 §5 Checklist + docs/01 §6（安全组确认 → 原子部署 → systemd → nginx → 预检 8a → 双通道签发）；脚本已备：scripts/deploy.sh、scripts/setup_nginx_cert.sh |
-| M5 加固扩展 | ⏳ 二期 | Basic Auth 复核、告警 webhook、8899 加固（需用户审批）、cloud-2 接入（ingest 已预留，默认 404） |
+| M4 部署上线 | ✅ 完成 | 2026-08-17 上线（scripts/deploy.sh 原子部署：备份→releases→软链→健康检查→自动回滚） |
+| M5 加固扩展 | 🟡 大部分完成 | **Basic Auth 已上线**（nginx 层）；告警 webhook（log-alert 已备）、cloud-2 接入（ingest 预留）待二期 |
+
+**二期增强（2026-08-17）**：
+- 服务台账（issue #2）：约定区自动发现 + 探活 + 域名探测 + 直达分级 + 下线告警（docs/05）
+- 通用 DataTable 组件：分页/筛选/聚合，服务/告警/设备三视图复用（docs/06）
+- 技术栈审查整改：面板 Basic Auth、前端 node 单测、GitHub Actions CI、移除 ECharts 死重
 
 **本地开发**：
 
@@ -20,11 +25,13 @@ cd /home/dc/projects/monitor-panel
 uv venv .venv && source .venv/bin/activate
 uv pip install -r requirements.txt          # fastapi uvicorn httpx psutil
 uvicorn app.main:app --port 8898            # 本地预览（collectors mock=True）
-# 冒烟测试
+# 冒烟测试（后端）
 uv pip install -r requirements-dev.txt && python -m pytest tests/ -q
+# 前端（类型检查 + 单测 + 构建）
+npm install && npm run typecheck && npm test && npm run build
 ```
 
-**M4 部署入口**（用户侧前置：DNS A 记录、备案确认、阿里云 RAM AK）：
+**M4 部署入口**（已上线，日常更新同命令）：
 
 ```bash
 ./scripts/deploy.sh --host dc-sy --remote-dir /opt/monitor-panel   # 原子部署
@@ -41,9 +48,9 @@ ssh dc-sy "sudo cp deploy/backup-db.{service,timer} /etc/systemd/system/ && sudo
 在 cloud（124.221.190.237）部署 `monitor.dc-sy.cn` 统一链路监控面板：
 整合 **frp 隧道监控 + tailscale 设备/连接质量 + 云服务器健康**，为"第二台云服务器兜底 / 双公网 IP 互检"预留扩展。
 
-**技术栈**：Python FastAPI + uvicorn（单进程）+ SQLite(WAL) + 原生 JS + Chart.js（vendored）
+**技术栈**：Python FastAPI + uvicorn（单进程）+ SQLite(WAL) + TypeScript + esbuild（无框架，字符串渲染）
 **端口**：8898（仅绑 127.0.0.1，nginx 反代 443）
-**访问**：https://monitor.dc-sy.cn（DNS 待添加 → 124.221.190.237）
+**访问**：https://monitor.dc-sy.cn（**Basic Auth 保护**，nginx 层 /etc/nginx/.htpasswd.monitor）
 
 ## 1. 开发目录结构（目标形态，按此组织代码）
 
@@ -78,17 +85,25 @@ monitor-panel/
 │       └── ingest.py      # POST /api/ingest（远端 agent 上报预留，本期默认 404）
 ├── web/
 │   ├── index.html         # 单页面板（顶部状态条 + 卡片 + 表格 + 趋势图区）
-│   ├── app.js             # 轮询/渲染/图表/阈值配色
-│   ├── chart.umd.min.js   # vendored Chart.js（本地，避免 CDN 依赖）
+│   ├── src/               # TypeScript 源码（esbuild 打包 → dist/app.js）
+│   │   ├── main.ts        # 入口：hash 路由 + 轮询调度 + 视图装配
+│   │   ├── table.ts       # 通用 DataTable：分页/筛选/聚合（docs/06）
+│   │   ├── ui.ts          # 组件库：win/tb/st/statusLevel/esc
+│   │   ├── state.ts       # 轮询结果缓存（视图读取，切换视图立即刷新）
+│   │   ├── api.ts / fmt.ts / ascii.ts / types.ts
+│   │   └── views/         # 视图：overview/devices/tunnels/services/alerts/…
+│   ├── dist/app.js        # 构建产物（minify）
 │   └── style.css
 ├── scripts/
 │   ├── deploy.sh          # rsync → 备份 → 符号链接切换 → 健康检查 → 回滚
 │   └── setup_nginx_cert.sh# nginx block + 证书双通道（--issuance http|dns）
-├── tests/                 # mock 数据源下的采集器/API 冒烟测试
+├── tests/                 # mock 数据源下的采集器/API 冒烟测试（pytest 42 项）
+│   └── table.test.ts      # DataTable 纯逻辑单测（node --test 6 项）
+├── .github/workflows/ci.yml  # CI：pytest + tsc + npm test + build
 ├── requirements.txt       # fastapi uvicorn httpx psutil
 ├── monitor-panel.service  # systemd 模板（127.0.0.1:8898）
 ├── README.md
-└── docs/                  # 本目录（方案/调研/评审三份报告）
+└── docs/                  # 本目录（方案/调研/评审/手册/约定 六份报告）
 ```
 
 ## 2. 开发顺序（里程碑）
@@ -124,19 +139,22 @@ services(id, node_id, device_id, device_name, tailscale_ip, port, -- 服务台�
 > 服务台账机制：自定义项目/网站统一绑定约定区（默认 10000–19999），面板自动扫描
 > 发现 + 探活；区间外固定端口走 manual 登记。详见 `docs/05-服务台账与端口约定.md`。
 
-### 3.2 API（只读，统一 `{ok, data, ts}`）
+### 3.2 API（统一 `{ok, data, ts}`；公网经 nginx Basic Auth 保护）
 
 | 端点 | 说明 |
 |---|---|
 | GET /api/overview | 聚合总览（前端主轮询点） |
 | GET /api/devices | tailscale 设备列表 |
-| POST /api/devices/{id}/ping | 手动 ping（只读） |
+| POST /api/devices/{id}/ping | 手动 ping（只读，限流 5s/设备） |
 | GET /api/frp | frps 隧道列表+流量 |
 | GET /api/system /api/certs /api/network | 资源/证书/探测 |
-| GET /api/services | 服务台账（自动发现 + 探活状态 + 直达链接） |
+| GET /api/services | 服务台账（自动发现 + 探活状态 + 直达链接 + 下线告警） |
 | GET /api/history?metric=&range=&bucket= | 趋势降采样 |
-| GET /api/healthz | 探活 |
+| GET /api/healthz | 探活（本机直连 127.0.0.1，nginx 认证不涉及） |
 | POST /api/ingest | 预留（本期 404） |
+
+> 公网访问 `https://monitor.dc-sy.cn` 需 Basic Auth（凭据文件 /etc/nginx/.htpasswd.monitor；
+> ACME 挑战路径已豁免认证）。本机 127.0.0.1:8898 直连无认证（部署健康检查走此通道）。
 
 ### 3.3 采集要点（评审确认的硬要求）
 
@@ -185,6 +203,9 @@ uvicorn app.main:app --port 8898            # 本地预览（collectors mock=Tru
 | `01-技术方案-v1.1.md` | 完整技术方案（架构/功能/API/数据模型/部署/扩展/风险，514 行） |
 | `02-数据源调研报告.md` | 数据源实测（frp 面板资产、tailscale/headscale 字段、采集频率、多云结论） |
 | `03-评审与复审报告.md` | t3 评审（阻塞项+修正项）与 t5 复审（通过+N1 修正） |
+| `04-设备接入手册.md` | 设备接入（阿里云/树莓派/子网路由/扩展预留） |
+| `05-服务台账与端口约定.md` | 服务台账机制（端口分区约定/自动发现/域名探测） |
+| `06-前端表格组件规范.md` | DataTable 通用组件（接入教程/规则/踩坑记录） |
 
 ## 7. 开发完成后交接
 
