@@ -163,3 +163,35 @@ def test_services_api(client, ingest_all):
               "url", "http_status", "latency_ms", "status", "missing_rounds",
               "source", "enabled", "first_seen_ts", "last_seen_ts"):
         assert k in s0, f"契约字段缺失: {k}"
+
+
+def test_services_down_alert_and_resolve(tmp_path):
+    """服务 closed → 下线告警；恢复 open → 告警自动 resolved。"""
+    from app import constants
+    from app.collectors.base import CollectorResult
+    from app.services.aggregator import Aggregator
+    db.close()
+    db.init_db(str(tmp_path / "t.db"))
+    agg = Aggregator()
+
+    def result(status: str) -> CollectorResult:
+        r = CollectorResult(node_id="cloud-1", group=constants.GROUP_SERVICES)
+        r.payload = {"services": [{
+            "device_id": "dev-a", "device_name": "a", "tailscale_ip": "100.64.0.9",
+            "port": 8898, "protocol": "http", "auto_name": "panel",
+            "status": status, "missing_rounds": 0, "source": "auto",
+            "last_seen_ts": 100.0, "updated_ts": 101.0}]}
+        return r
+
+    # 1) closed → 产生告警（source=service:100.64.0.9:8898）
+    _run(agg.ingest(result("closed")))
+    alerts = db.get_alerts(unresolved_only=True)
+    assert len(alerts) == 1
+    assert alerts[0]["source"] == "service:100.64.0.9:8898"
+    assert alerts[0]["level"] == constants.LEVEL_WARN
+    assert "下线" in alerts[0]["message"]
+
+    # 2) open → resolved
+    _run(agg.ingest(result("open")))
+    assert db.get_alerts(unresolved_only=True) == []
+    db.close()

@@ -209,11 +209,23 @@ class Aggregator:
             else:
                 db.resolve_alerts(src)
 
-    # ---------------- services（服务台账：payload → services 表） ----------------
+    # ---------------- services（服务台账：payload → services 表 + 下线告警） ----------------
     def _on_services(self, result: CollectorResult, ts: float) -> None:
         rows = (result.payload or {}).get("services") or []
         if rows:
             db.upsert_services(result.node_id, rows)
+        for row in rows:
+            ip = row.get("tailscale_ip") or ""
+            port = row.get("port")
+            if not port:
+                continue
+            src = f"service:{ip}:{port}"
+            name = row.get("name") or row.get("auto_name") or f"{ip}:{port}"
+            if row.get("status") == "closed":
+                # 连续 N 轮未开放才置 closed（采集器已防抖），此处补主动告警
+                self._alert(constants.LEVEL_WARN, src, f"服务 {name}（{ip}:{port}）下线")
+            elif row.get("status") == "open":
+                db.resolve_alerts(src)
 
     # ---------------- 告警 ----------------
     @staticmethod
