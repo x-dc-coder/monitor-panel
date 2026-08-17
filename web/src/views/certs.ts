@@ -1,11 +1,7 @@
 /** 证书视图：到期清单 + ASCII 进度条（20 格 = 90 天）。 */
 import { hbar } from "../ascii";
 import { S } from "../state";
-import { esc, pageHead, st, tb, win } from "../ui";
-
-function statusLevel(s: string): "ok" | "warn" | "crit" | "off" {
-  return s === "ok" ? "ok" : s === "warn" ? "warn" : s === "crit" ? "crit" : "off";
-}
+import { esc, pageHead, st, statusLevel, tb, win } from "../ui";
 
 export function renderCerts(): string {
   const certs = S.certs ? S.certs.certs : [];

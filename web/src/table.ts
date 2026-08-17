@@ -58,7 +58,7 @@ function stateFor(viewId: string): TableState {
 const PAGE_SIZES = [10, 20, 50];
 
 /** 应用筛选：多列下拉 + 分组 + 搜索（搜索匹配任意可读列） */
-function applyFilter<T>(
+export function applyFilter<T>(
   rows: T[],
   def: TableDef,
   s: TableState,
@@ -83,7 +83,7 @@ function applyFilter<T>(
 }
 
 /** 列可选值（去重，按出现顺序） */
-function uniqueVals<T>(rows: T[], key: string): string[] {
+export function uniqueVals<T>(rows: T[], key: string): string[] {
   const seen: string[] = [];
   for (const r of rows) {
     const v = String((r as any)[key] ?? "");
@@ -93,7 +93,7 @@ function uniqueVals<T>(rows: T[], key: string): string[] {
 }
 
 /** 分组统计：{值: 计数}（按出现顺序） */
-function groupCounts<T>(rows: T[], key: string): [string, number][] {
+export function groupCounts<T>(rows: T[], key: string): [string, number][] {
   const m = new Map<string, number>();
   for (const r of rows) {
     const v = String((r as any)[key] ?? "—");
@@ -102,7 +102,7 @@ function groupCounts<T>(rows: T[], key: string): [string, number][] {
   return [...m.entries()];
 }
 
-function pageRows<T>(rows: T[], s: TableState): { items: T[]; total: number; pages: number } {
+export function pageRows<T>(rows: T[], s: TableState): { items: T[]; total: number; pages: number } {
   const total = rows.length;
   const pages = Math.max(1, Math.ceil(total / s.pageSize));
   if (s.page < 1) s.page = 1;

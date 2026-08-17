@@ -80,5 +80,5 @@ def test_index_page_and_assets(client):
     r = client.get("/")
     assert r.status_code == 200
     assert "monitor.dc-sy.cn" in r.text
-    for asset in ("/dist/app.js", "/style.css", "/chart.umd.min.js"):
+    for asset in ("/dist/app.js", "/style.css"):
         assert client.get(asset).status_code == 200

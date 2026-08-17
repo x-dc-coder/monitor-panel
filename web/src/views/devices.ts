@@ -3,14 +3,10 @@ import { fmtMs, nowTime } from "../fmt";
 import { S } from "../state";
 import { api } from "../api";
 import type { DeviceRow, PingResult } from "../types";
-import { esc, pageHead, st, win } from "../ui";
+import { esc, pageHead, st, statusLevel, win } from "../ui";
 import { table, type TableDef } from "../table";
 
 const TABLE_ID = "devices";
-
-function statusLevel(s: string): "ok" | "warn" | "crit" | "off" {
-  return s === "ok" ? "ok" : s === "warn" ? "warn" : s === "crit" ? "crit" : "off";
-}
 
 function statusCell(d: DeviceRow): string {
   const lvl = statusLevel(d.status || (d.online ? "ok" : "off"));

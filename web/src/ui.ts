@@ -39,3 +39,8 @@ export function tb(headers: string[], rowsHtml: string, emptyMsg?: string): stri
 export function tbtn(label: string, extraCls = ""): string {
   return '<span class="tbtn ' + extraCls + '">' + esc(label) + "</span>";
 }
+
+/** 状态字符串 → 状态级别（ok/warn/crit 之外的归 off） */
+export function statusLevel(s: string): StatusLevel {
+  return s === "ok" ? "ok" : s === "warn" ? "warn" : s === "crit" ? "crit" : "off";
+}

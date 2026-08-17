@@ -3,7 +3,7 @@ import { sparkline } from "../ascii";
 import { fmtBytes, fmtMs } from "../fmt";
 import { S } from "../state";
 import type { OverviewData } from "../types";
-import { esc, pageHead, st, tb, win } from "../ui";
+import { esc, pageHead, st, statusLevel, tb, win } from "../ui";
 
 function kpi(
   idx: string,
@@ -23,10 +23,6 @@ function kpi(
     '<div class="s"><span>' + esc(s1) + "</span><b>" + esc(s2) + "</b></div>" +
     (sp && sp.length ? '<div class="sp">' + sparkline(sp, spCls) + "</div>" : "") +
     "</div>";
-}
-
-function statusLevel(s: string): "ok" | "warn" | "crit" | "off" {
-  return s === "ok" ? "ok" : s === "warn" ? "warn" : s === "crit" ? "crit" : "off";
 }
 
 export function renderOverview(): string {
