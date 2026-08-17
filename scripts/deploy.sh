@@ -32,7 +32,7 @@ BACKUPS="$REMOTE_DIR/backups"
 
 health_check() {
   echo "→ 健康检查 (127.0.0.1:8898/api/healthz)…"
-  if ssh "$HOST" "curl -fsS --max-time 10 http://127.0.0.1:8898/api/healthz | grep -q '\\"ok\\":true'"; then
+  if ssh "$HOST" "curl -fsS --max-time 10 http://127.0.0.1:8898/api/healthz | grep -q '\"ok\":true'"; then
     echo "✓ 健康检查通过"
     return 0
   fi
@@ -43,13 +43,13 @@ health_check() {
 switch_and_restart() {
   local target="$1"
   echo "→ 切换 current → $target"
-  ssh "$HOST" "ln -sfn '$target' '$CURRENT' && systemctl restart monitor-panel && sleep 3"
+  ssh "$HOST" "sudo ln -sfn '$target' '$CURRENT' && sudo systemctl restart monitor-panel && sleep 3"
   health_check
 }
 
 if [ "$ROLLBACK" = "1" ]; then
   echo "=== 回滚模式 ==="
-  PREV="$(ssh "$HOST" "ls -1d '$REMOTE_DIR'/releases/*/ 2>/dev/null | grep -v -F \$(readlink '$CURRENT') | tail -1")"
+  PREV="$(ssh "$HOST" "ls -1d '$REMOTE_DIR'/releases/*/ 2>/dev/null | grep -vxF \"\$(readlink -f '$CURRENT')/\" | tail -1")"
   if [ -z "$PREV" ]; then
     echo "✗ 没有可回滚的 release"; exit 1
   fi
@@ -62,9 +62,10 @@ fi
 echo "=== 部署 monitor-panel → $HOST:$REMOTE_DIR ==="
 
 echo "→ 备份当前版本（如存在）"
+OLD_CURRENT="$(ssh "$HOST" "readlink '$CURRENT' 2>/dev/null || true")"
 ssh "$HOST" "mkdir -p '$BACKUPS' '$REMOTE_DIR/releases'"
-ssh "$HOST" "if [ -e '$CURRENT' ] && [ -d '$CURRENT' ]; then
-  tar czf '$BACKUPS/pre-$TS.tar.gz' -C '$REMOTE_DIR' --exclude=current/data --exclude=current/.venv --exclude=current/.env current 2>/dev/null && echo '✓ 备份 current → pre-'$TS'.tar.gz'
+ssh "$HOST" "if [ -n '$OLD_CURRENT' ] && [ -d '$CURRENT' ]; then
+  sudo tar czhf '$BACKUPS/pre-$TS.tar.gz' -C '$REMOTE_DIR' --exclude=current/data --exclude=current/.venv --exclude=current/.env current && sudo chown ubuntu:ubuntu '$BACKUPS/pre-$TS.tar.gz' && echo '✓ 备份 current → pre-'$TS'.tar.gz'
 fi"
 
 echo "→ rsync 到 releases/$TS（排除 venv/git/env/数据）"
@@ -76,6 +77,9 @@ rsync -az --delete \
 
 echo "→ 远端依赖准备（uv 优先）"
 ssh "$HOST" "cd '$RELEASE' && if command -v uv >/dev/null 2>&1; then uv venv .venv && uv pip install -q -r requirements.txt; else python3 -m venv .venv && '$RELEASE'/.venv/bin/pip install -q -r requirements.txt; fi"
+
+echo "→ release 属主修正为 monitor（服务以 monitor 用户运行）"
+ssh "$HOST" "sudo chown -R monitor:monitor '$RELEASE'"
 
 # 运行态配置与数据（固定路径，不随 release 切换分叉）：
 # - .env: 复制到 release 内（代码读 BASE_DIR/.env），权威源 /opt/monitor-panel/env（systemd）
@@ -90,7 +94,7 @@ if switch_and_restart "$RELEASE"; then
   echo "  回滚:     $0 --rollback --host $HOST --remote-dir $REMOTE_DIR"
 else
   echo "✗ 新版本健康检查失败，自动回滚…"
-  PREV="$(ssh "$HOST" "ls -1d '$REMOTE_DIR'/releases/*/ 2>/dev/null | grep -v -F '$RELEASE' | tail -1")"
+  PREV="$OLD_CURRENT"
   if [ -n "$PREV" ]; then
     switch_and_restart "$PREV" && echo "✓ 已回滚到 $PREV" || echo "✗ 回滚也失败，人工介入"
   fi
