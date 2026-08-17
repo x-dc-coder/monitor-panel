@@ -130,6 +130,24 @@ DEVICE_MAP = _env_json("MONITOR_DEVICE_MAP", {
     "oppo-pad-mini": "laptop",
 })
 
+# ================= 服务台账（issue #2：端口约定驱动自动发现） =================
+# 约定区：自定义项目/网站统一绑定 [lo, hi] 内端口（文档 docs/05-服务台账与端口约定.md），
+# 面板自动扫描该区间完成服务发现 + 探活；区间外固定端口走 manual 登记（db source=manual）。
+SERVICES_PORT_RANGE = _env_json("MONITOR_SERVICES_PORT_RANGE", [10000, 19999])
+SERVICES_ALIASES = _env_json("MONITOR_SERVICES_ALIASES", {})      # {"ip:port": "显示名"}
+# 约定区外必探端口（按设备 IP）：{"100.64.0.1": [22, 443]} 或带探测选项的对象形态
+#   {"100.64.0.1": {"443": {"host": "monitor.dc-sy.cn", "https": true, "path": "/"}}}
+#   host=Host 头/SNI 域名（nginx 虚拟主机按域名路由，IP 探测会 404）；https=TLS 探测；
+#   path=请求路径（如 /metrics）；"*"=所有设备，"local"=本机 127.0.0.1
+SERVICES_EXTRA_PORTS = _env_json("MONITOR_SERVICES_EXTRA_PORTS", {})
+# 服务公网直达地址：{"ip:port": "https://..."}，面板链接用它；未配置的内网/回环地址仅展示标记
+SERVICES_PUBLIC_URLS = _env_json("MONITOR_SERVICES_PUBLIC_URLS", {})
+SERVICES_SCAN_BATCH = _env_int("MONITOR_SERVICES_SCAN_BATCH", 256)   # 每轮每设备扫描端口数（分片）
+SERVICES_CONNECT_TIMEOUT = _env_float("MONITOR_SERVICES_CONNECT_TIMEOUT", 1.5)
+SERVICES_HTTP_TIMEOUT = _env_float("MONITOR_SERVICES_HTTP_TIMEOUT", 2.0)
+SERVICES_CONCURRENCY = _env_int("MONITOR_SERVICES_CONCURRENCY", 64)
+SERVICES_MISSING_ROUNDS = _env_int("MONITOR_SERVICES_MISSING_ROUNDS", 3)  # 连续 N 轮未开放 → closed
+
 # ================= 采集周期（秒） =================
 INTERVALS = {
     "frp": _env_int("MONITOR_INTERVAL_FRP", 30),
@@ -139,6 +157,7 @@ INTERVALS = {
     "system": _env_int("MONITOR_INTERVAL_SYSTEM", 30),
     "network": _env_int("MONITOR_INTERVAL_NETWORK", 60),
     "certs": _env_int("MONITOR_INTERVAL_CERTS", 3600),
+    "services": _env_int("MONITOR_INTERVAL_SERVICES", 60),
 }
 # tailscale ping 语义（评审 F5/E3/E4）
 PING_PACKETS = _env_int("MONITOR_PING_PACKETS", 3)          # 每节点 3 包取中位/最小

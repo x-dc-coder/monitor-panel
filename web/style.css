@@ -218,3 +218,7 @@ select.tbtn option{background:var(--bg2);color:var(--fg)}
   .statusbar .seg{padding:6px 9px}
   .statusbar .lbl{display:none}
 }
+
+/* 服务直达链接可达性标记 */
+.badge{display:inline-block;padding:1px 6px;border-radius:8px;font-size:10px;background:rgba(128,128,128,.15);color:var(--faint);border:1px solid rgba(128,128,128,.25);white-space:nowrap}
+.badge[title]{cursor:help}

@@ -63,6 +63,7 @@ monitor-panel/
 │   │   ├── headscale.py   # 127.0.0.1:9090 metrics 关键指标 + 8080 TCP 探活
 │   │   ├── system.py      # psutil：CPU/内存/磁盘/负载/网络吞吐
 │   │   ├── network.py     # 探测对执行：ICMP/TCP/HTTP/DNS（asyncio 并发）
+│   │   ├── services.py    # 服务台账：约定区扫描 + 协议识别 + 探活（issue #2）
 │   │   └── certs.py       # letsencrypt 证书到期扫描
 │   ├── services/
 │   │   ├── aggregator.py  # 最新快照缓存 + 派生指标 + 阈值判定
@@ -73,6 +74,7 @@ monitor-panel/
 │       ├── frp.py         # GET /api/frp
 │       ├── history.py     # GET /api/history
 │       ├── system.py      # GET /api/system, /api/certs, /api/network
+│       ├── services.py    # GET /api/services（服务台账）
 │       └── ingest.py      # POST /api/ingest（远端 agent 上报预留，本期默认 404）
 ├── web/
 │   ├── index.html         # 单页面板（顶部状态条 + 卡片 + 表格 + 趋势图区）
@@ -103,7 +105,7 @@ monitor-panel/
 
 ## 3. 核心设计要点（开发时必读）
 
-### 3.1 数据模型（5 张表，均带 node_id 支持多云）
+### 3.1 数据模型（6 张表，均带 node_id 支持多云）
 
 ```sql
 monitor_nodes(id, name, role, public_ip, enabled, last_seen_ts)   -- 'cloud-1','cloud-2'
@@ -113,7 +115,14 @@ tunnels(node_id, tunnel_id, type, remote_port, local_addr, status,
         traffic_in, traffic_out, updated_ts)                      -- frp 隧道快照
 samples(id, node_id, metric_group, metric_name, value, ts)        -- 时序（30天保留）
 alerts(id, ts, level, source, message, resolved)                  -- 告警流（90天）
+services(id, node_id, device_id, device_name, tailscale_ip, port, -- 服务台账（issue #2）
+         name, auto_name, protocol, url, http_status, latency_ms,
+         status, missing_rounds, source, enabled,
+         first_seen_ts, last_seen_ts, updated_ts)                 -- 端口约定驱动自动发现
 ```
+
+> 服务台账机制：自定义项目/网站统一绑定约定区（默认 10000–19999），面板自动扫描
+> 发现 + 探活；区间外固定端口走 manual 登记。详见 `docs/05-服务台账与端口约定.md`。
 
 ### 3.2 API（只读，统一 `{ok, data, ts}`）
 
@@ -124,6 +133,7 @@ alerts(id, ts, level, source, message, resolved)                  -- 告警流�
 | POST /api/devices/{id}/ping | 手动 ping（只读） |
 | GET /api/frp | frps 隧道列表+流量 |
 | GET /api/system /api/certs /api/network | 资源/证书/探测 |
+| GET /api/services | 服务台账（自动发现 + 探活状态 + 直达链接） |
 | GET /api/history?metric=&range=&bucket= | 趋势降采样 |
 | GET /api/healthz | 探活 |
 | POST /api/ingest | 预留（本期 404） |

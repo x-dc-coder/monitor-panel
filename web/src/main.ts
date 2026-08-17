@@ -6,7 +6,7 @@ import { api } from "./api";
 import { S, setCur } from "./state";
 import type {
   AlertsData, CertsData, DevicesData, FrpData, HealthzData,
-  HistoryData, NetworkData, OverviewData,
+  HistoryData, NetworkData, OverviewData, ServicesData,
 } from "./types";
 import { fmtDate, fmtTs } from "./fmt";
 import { isViewId, placeholder, views } from "./views";
@@ -78,6 +78,12 @@ async function pollProbes(): Promise<void> {
     if (S.cur === "probes") render();
   } catch { /* 静默 */ }
 }
+async function pollServices(): Promise<void> {
+  try {
+    S.services = await api<ServicesData>("/api/services");
+    if (S.cur === "services") render();
+  } catch { /* 静默 */ }
+}
 async function pollAlerts(): Promise<void> {
   try {
     S.alerts = await api<AlertsData>("/api/alerts?limit=50");
@@ -142,6 +148,7 @@ function boot(): void {
   void pollFrp();
   void pollCerts();
   void pollProbes();
+  void pollServices();
   void pollAlerts();
   void pollHealthz();
   window.setInterval(() => void pollOverview(), 5000);
@@ -150,6 +157,7 @@ function boot(): void {
   window.setInterval(() => void pollAlerts(), 10000);
   window.setInterval(() => void pollCerts(), 30000);
   window.setInterval(() => void pollProbes(), 30000);
+  window.setInterval(() => void pollServices(), 30000);
   window.setInterval(() => void pollHealthz(), 30000);
   window.setInterval(() => void refreshSpark(), 30000);
 }

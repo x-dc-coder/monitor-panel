@@ -14,6 +14,7 @@ GROUP_SYSTEM = "system"             # 本机资源（psutil）
 GROUP_NETWORK = "network"           # 公网探测对
 GROUP_CERT_DAYS = "cert_days"       # 证书剩余天数
 GROUP_HEADSCALE = "headscale"       # headscale 控制面
+GROUP_SERVICES = "services"         # 服务台账（issue #2：端口约定驱动自动发现）
 
 METRIC_GROUPS = (
     GROUP_FRP_TRAFFIC,
@@ -23,6 +24,7 @@ METRIC_GROUPS = (
     GROUP_NETWORK,
     GROUP_CERT_DAYS,
     GROUP_HEADSCALE,
+    GROUP_SERVICES,
 )
 
 # ---- 各 group 允许的基础指标名 ----
@@ -72,6 +74,10 @@ GROUP_METRICS: dict[str, tuple[str, ...]] = {
         "mapresponse_sent",
         "tcp_ok",              # 8080 探活 1/0
         "derp_ok",             # 控制面可达性代理 1/0
+    ),
+    GROUP_SERVICES: (
+        "latency_ms",          # latency_ms.<ip:port>
+        "reachable",           # reachable.<ip:port> 1/0
     ),
 }
 

@@ -80,6 +80,30 @@ CREATE TABLE IF NOT EXISTS alerts (
   resolved INTEGER DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_alerts_source ON alerts(source, ts);
+
+CREATE TABLE IF NOT EXISTS services (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  node_id       TEXT NOT NULL,
+  device_id     TEXT NOT NULL,
+  device_name   TEXT,
+  tailscale_ip  TEXT,
+  port          INT NOT NULL,
+  name          TEXT,            -- 人工覆盖名（SERVICES_ALIASES）
+  auto_name     TEXT,            -- 自动提取（title/server/ip:port）
+  protocol      TEXT DEFAULT 'tcp',   -- tcp/http/ssh/unknown
+  url           TEXT,            -- http 可达时的直达链接
+  http_status   INT,
+  latency_ms    REAL,
+  status        TEXT DEFAULT 'unknown', -- open/closed/unknown
+  missing_rounds INT DEFAULT 0,
+  source        TEXT DEFAULT 'auto',    -- auto(范围扫描)/manual(固定登记)
+  enabled       INT DEFAULT 1,
+  first_seen_ts REAL,
+  last_seen_ts  REAL,
+  updated_ts    REAL,
+  UNIQUE(node_id, device_id, port)
+);
+CREATE INDEX IF NOT EXISTS idx_services_status ON services(status);
 """
 
 
@@ -293,6 +317,65 @@ def get_tunnels(node_id: str | None = None) -> list[dict]:
         sql += " WHERE node_id=?"
         params.append(node_id)
     sql += " ORDER BY tunnel_id"
+    with _lock:
+        rows = conn.execute(sql, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ---------------- services（服务台账：自动发现 + 探活快照） ----------------
+_SERVICE_DEFAULTS = {
+    "device_name": None, "tailscale_ip": None, "name": None, "auto_name": None,
+    "protocol": "tcp", "url": None, "http_status": None, "latency_ms": None,
+    "status": "unknown", "missing_rounds": 0, "source": "auto", "enabled": 1,
+    "first_seen_ts": None, "last_seen_ts": None, "updated_ts": None,
+}
+
+
+def upsert_services(node_id: str, rows: list[dict]) -> None:
+    """服务台账 upsert：UNIQUE(node_id, device_id, port)。
+
+    已存在行保留 first_seen_ts；人工覆盖名（name）不被自动名覆盖；
+    自动发现（auto）与固定登记（manual）统一入口。
+    """
+    if not rows:
+        return
+    rows = [{**_SERVICE_DEFAULTS, **r, "node_id": node_id} for r in rows]
+    conn = _cursor()
+    with _lock:
+        conn.executemany(
+            "INSERT INTO services(node_id, device_id, device_name, tailscale_ip, port, "
+            "name, auto_name, protocol, url, http_status, latency_ms, status, "
+            "missing_rounds, source, enabled, first_seen_ts, last_seen_ts, updated_ts) "
+            "VALUES (:node_id, :device_id, :device_name, :tailscale_ip, :port, "
+            ":name, :auto_name, :protocol, :url, :http_status, :latency_ms, :status, "
+            ":missing_rounds, :source, :enabled, :first_seen_ts, :last_seen_ts, :updated_ts) "
+            "ON CONFLICT(node_id, device_id, port) DO UPDATE SET "
+            "device_name=excluded.device_name, tailscale_ip=excluded.tailscale_ip, "
+            "name=COALESCE(excluded.name, services.name), "
+            "auto_name=excluded.auto_name, protocol=excluded.protocol, url=excluded.url, "
+            "http_status=excluded.http_status, latency_ms=excluded.latency_ms, "
+            "status=excluded.status, missing_rounds=excluded.missing_rounds, "
+            "source=excluded.source, enabled=excluded.enabled, "
+            "last_seen_ts=excluded.last_seen_ts, updated_ts=excluded.updated_ts",
+            rows)
+        conn.commit()
+
+
+def get_services(node_id: str | None = None,
+                 status: str | None = None) -> list[dict]:
+    conn = _cursor()
+    sql = "SELECT * FROM services"
+    params: list = []
+    conds = []
+    if node_id:
+        conds.append("node_id=?")
+        params.append(node_id)
+    if status:
+        conds.append("status=?")
+        params.append(status)
+    if conds:
+        sql += " WHERE " + " AND ".join(conds)
+    sql += " ORDER BY tailscale_ip, port"
     with _lock:
         rows = conn.execute(sql, params).fetchall()
     return [dict(r) for r in rows]

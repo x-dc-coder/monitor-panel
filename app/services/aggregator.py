@@ -209,6 +209,12 @@ class Aggregator:
             else:
                 db.resolve_alerts(src)
 
+    # ---------------- services（服务台账：payload → services 表） ----------------
+    def _on_services(self, result: CollectorResult, ts: float) -> None:
+        rows = (result.payload or {}).get("services") or []
+        if rows:
+            db.upsert_services(result.node_id, rows)
+
     # ---------------- 告警 ----------------
     @staticmethod
     def _alert(level: str, source: str, message: str) -> None:

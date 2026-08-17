@@ -175,6 +175,34 @@ export interface NetworkData {
   ts: number | null;
 }
 
+/* ---------------- /api/services ---------------- */
+export interface ServiceRow {
+  device_id: string;
+  device_name: string | null;
+  tailscale_ip: string | null;
+  port: number;
+  name: string | null;
+  auto_name: string | null;
+  protocol: string | null;
+  url: string | null;
+  public_url: string | null;
+  http_status: number | null;
+  latency_ms: number | null;
+  status: string;
+  missing_rounds: number;
+  source: string;
+  enabled: boolean;
+  first_seen_ts: number | null;
+  last_seen_ts: number | null;
+  updated_ts: number | null;
+}
+export interface ServicesData {
+  services: ServiceRow[];
+  range: [number, number];
+  summary: { total: number; open: number; closed: number; manual: number };
+  ts: number;
+}
+
 /* ---------------- /api/alerts ---------------- */
 export type AlertLevel = "info" | "warn" | "crit";
 export interface AlertRow {

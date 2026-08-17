@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app import api as api_mod
 from app import config, db
-from app.api import devices, frp, history, ingest, overview, system
+from app.api import devices, frp, history, ingest, overview, services, system
 from app.collectors import build_registry
 from app.scheduler import Scheduler
 from app.services.aggregator import Aggregator
@@ -74,7 +74,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="monitor-panel", version=config.VERSION, lifespan=lifespan)
 
 for router in (overview.router, devices.router, frp.router,
-               history.router, system.router, ingest.router):
+               history.router, system.router, services.router, ingest.router):
     app.include_router(router, prefix="/api")
 
 

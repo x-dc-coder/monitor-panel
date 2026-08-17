@@ -13,6 +13,7 @@ from app.collectors.certs import CertsCollector
 from app.collectors.frp import FrpCollector
 from app.collectors.headscale import HeadscaleCollector
 from app.collectors.network import NetworkCollector
+from app.collectors.services import ServicesCollector
 from app.collectors.system import SystemCollector
 from app.collectors.tailscale import TailscaleCollector
 
@@ -25,6 +26,7 @@ COLLECTOR_CLASSES = (
     SystemCollector,
     NetworkCollector,
     CertsCollector,
+    ServicesCollector,
 )
 
 registry: dict[str, Collector] = {}
@@ -46,4 +48,5 @@ def get(name: str) -> Collector | None:
 
 __all__ = ["Collector", "CollectorResult", "build_registry", "registry", "get",
            "FrpCollector", "TailscaleCollector", "HeadscaleCollector",
-           "SystemCollector", "NetworkCollector", "CertsCollector"]
+           "SystemCollector", "NetworkCollector", "CertsCollector",
+           "ServicesCollector"]
