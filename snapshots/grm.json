@@ -1,0 +1,85 @@
+{
+ "node_id": "cloud-1",
+ "group": "grm",
+ "metrics": [
+  {
+   "name": "repos_total",
+   "value": 3.0,
+   "ts": 1787403535.7051582
+  },
+  {
+   "name": "repos_with_release",
+   "value": 2.0,
+   "ts": 1787403535.7051582
+  },
+  {
+   "name": "repos_new",
+   "value": 1.0,
+   "ts": 1787403535.7051582
+  }
+ ],
+ "groups": {},
+ "payload": {
+  "repos": [
+   {
+    "repo_id": "github:x-dc-coder/monitor-panel",
+    "url": "https://github.com/x-dc-coder/monitor-panel",
+    "owner_slug": "x-dc-coder/monitor-panel",
+    "display_name": "monitor-panel",
+    "tags": "[\"ops\", \"panel\"]",
+    "is_pinned": 1,
+    "is_new": 0,
+    "latest_tag": "v1.2",
+    "latest_name": "v1.2 M4/M5",
+    "latest_url": "https://github.com/x-dc-coder/monitor-panel/releases/tag/v1.2",
+    "latest_prerelease": 0,
+    "published_ts": 1786924800.0,
+    "readme_summary": null,
+    "recent_commits": "[]",
+    "updated_ts": 1787403535.7051582
+   },
+   {
+    "repo_id": "github:x-dc-coder/github-release-monitor",
+    "url": "https://github.com/x-dc-coder/github-release-monitor",
+    "owner_slug": "x-dc-coder/github-release-monitor",
+    "display_name": null,
+    "tags": "[\"monitor\"]",
+    "is_pinned": 0,
+    "is_new": 1,
+    "latest_tag": "v2.1",
+    "latest_name": null,
+    "latest_url": "https://github.com/x-dc-coder/github-release-monitor/releases/tag/v2.1",
+    "latest_prerelease": 1,
+    "published_ts": 1787184000.0,
+    "readme_summary": null,
+    "recent_commits": "[]",
+    "updated_ts": 1787403535.7051582
+   },
+   {
+    "repo_id": "github:example/no-release-repo",
+    "url": "https://github.com/example/no-release-repo",
+    "owner_slug": "example/no-release-repo",
+    "display_name": "无 release 示例",
+    "tags": "[]",
+    "is_pinned": 0,
+    "is_new": 0,
+    "latest_tag": null,
+    "latest_name": null,
+    "latest_url": null,
+    "latest_prerelease": 0,
+    "published_ts": null,
+    "readme_summary": null,
+    "recent_commits": "[]",
+    "updated_ts": 1787403535.7051582
+   }
+  ],
+  "summary": {
+   "total": 3,
+   "with_release": 2,
+   "new_release": 1
+  },
+  "base_url": "https://releases.monitor.dc-sy.cn",
+  "ts": 1787403535.7051582,
+  "mock": true
+ }
+}

@@ -39,6 +39,15 @@ uv pip install -r requirements-dev.txt && python -m pytest tests/ -q
 npm install && npm run typecheck && npm test && npm run build
 ```
 
+**端到端验证（上线后回归，Playwright headless）**：
+
+```bash
+PANEL_USER=<basic-auth 用户名> PANEL_PASS=<密码> npm run verify:e2e
+# 覆盖：登录 / 10 视图遍历 + console 0 error 基线 / Release 监控卡片 /
+#       390+768px 无横向溢出 + 次要列隐藏 / 截图 → /tmp/panel-shots/
+# 可选：PANEL_URL=http://127.0.0.1:8898 走本机（免 Basic Auth）
+```
+
 **M4 部署入口**（已上线，日常更新同命令）：
 
 ```bash
@@ -232,6 +241,8 @@ env 文件加载顺序（`app/config.py`，`setdefault` 语义——已存在的
 | `04-设备接入手册.md` | 设备接入（阿里云/树莓派/子网路由/扩展预留） |
 | `05-服务台账与端口约定.md` | 服务台账机制（端口分区约定/自动发现/域名探测） |
 | `06-前端表格组件规范.md` | DataTable 通用组件（接入教程/规则/踩坑记录） |
+| `07-release-monitor.md` | Release 监控区块（grm 只读聚合：数据契约/降级语义/fork 扩展联动/排障） |
+| `08-cloud2-ingest-runbook.md` | cloud-2 接入手册（ingest 启用步骤/上报契约/token 轮换） |
 
 ## 7. 开发完成后交接
 

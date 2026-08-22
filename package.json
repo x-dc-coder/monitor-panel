@@ -9,7 +9,8 @@
     "watch": "esbuild web/src/main.ts --bundle --outfile=web/dist/app.js --sourcemap --watch",
     "typecheck": "tsc --noEmit",
     "test": "esbuild tests/table.test.ts --bundle --platform=node --format=cjs --outfile=/tmp/table.test.cjs && node --test /tmp/table.test.cjs",
-    "gen:types": "node scripts/gen_types.js"
+    "gen:types": "node scripts/gen_types.js",
+    "verify:e2e": "node scripts/verify-panel.cjs"
   },
   "devDependencies": {
     "esbuild": "^0.24.0",

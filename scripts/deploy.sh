@@ -70,10 +70,11 @@ ssh "$HOST" "if [ -n '$OLD_CURRENT' ] && [ -d '$CURRENT' ]; then
   sudo tar czhf '$BACKUPS/pre-$TS.tar.gz' -C '$REMOTE_DIR' --exclude=current/data --exclude=current/.venv --exclude=current/.env current && sudo -n monitor-deploy-ctl chown ubuntu:ubuntu '$BACKUPS/pre-$TS.tar.gz' && echo '✓ 备份 current → pre-'$TS'.tar.gz'
 fi"
 
-echo "→ rsync 到 releases/$TS（排除 venv/git/env/数据）"
+echo "→ rsync 到 releases/$TS（排除 venv/git/env/数据/node_modules）"
 rsync -az --delete \
   --exclude '.venv' --exclude '.git' --exclude '.env' --exclude 'data' \
   --exclude 'backups' --exclude 'releases' --exclude '__pycache__' \
+  --exclude 'node_modules' --exclude '.openapi.json' --exclude 'web/dist/.map' \
   --exclude '*.db' --exclude '*.db-wal' --exclude '*.db-shm' \
   "$LOCAL_DIR/" "$HOST:$RELEASE/"
 
