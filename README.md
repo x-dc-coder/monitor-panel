@@ -1,9 +1,9 @@
 # monitor.dc-sy.cn 统一监控面板 — 开发计划与任务书
 
-> 版本：v1.2 ｜ 更新：2026-08-17 ｜ 状态：**M1–M5 大部分完成，线上运行中（release 20260817-132017）**
+> 版本：v1.3 ｜ 更新：2026-08-22 ｜ 状态：**M1–M5 完成 + issue 清零，线上运行中（release 20260822-195935）**
 > 本文档是开发工作区的主指引；详细设计见 docs/ 下六份团队报告。
 
-## 开发状态（2026-08-17 更新）
+## 开发状态（2026-08-22 更新）
 
 | 里程碑 | 状态 | 说明 |
 |---|---|---|
@@ -11,7 +11,15 @@
 | M2 数据源接入 | ✅ 完成 | frp（per-type 端点 + /api/proxy/all 探测 + 降级 8899）、tailscale（status+ping 轮巡，Semaphore(2)+超时 kill+3 包中位）、system（psutil+to_thread）、脱敏层 sanitize()；sudoers 白名单已备（deploy/） |
 | M3 面板完善 | ✅ 完成 | overview 聚合、设备表（device_map 对照）、隧道表、链路质量表、趋势图（降采样）、证书/headscale/网络探测、告警流、手动 ping（限流 5s/设备） |
 | M4 部署上线 | ✅ 完成 | 2026-08-17 上线（scripts/deploy.sh 原子部署：备份→releases→软链→健康检查→自动回滚） |
-| M5 加固扩展 | 🟡 大部分完成 | **Basic Auth 已上线**（nginx 层）；告警 webhook（log-alert 已备）、cloud-2 接入（ingest 预留）待二期 |
+| M5 加固扩展 | ✅ 完成 | Basic Auth、配置统一（fail-fast + mode 健康检查）、Release 监控聚合、移动端适配、ingest 认证就绪（cloud-2 接入即开）、openapi 类型管线 |
+
+**issue 清零批次（2026-08-22，全 5 个 open issue 落地）**：
+- **#1 配置统一**：env 单一权威源 `/opt/monitor-panel/env`（systemd 与 config.py 双通道同源，release 零拷贝）；`validate_config()` live 凭据缺失拒启；deploy.sh 健康检查校验 `mode ∈ {live,snapshot}`（回落 mock = 部署失败自动回滚）；backup-db/fetch_snapshot 散落点收敛；.env.example 覆盖全部 63 变量
+- **#4 Release 监控区块**：`collectors/grm.py` 只读聚合同机 repositories.json（5min），grm_repos 快照表 + prune；前端卡片视图（NEW/prerelease/置顶/tags，无 release 降级占位待 fork 扩展字段）+ overview 摘要行；grm 不可读仅本区块降级
+- **#5 ingest 认证**：nginx `location = /api/ingest auth_basic off`（limit_except POST）+ 应用层 `hmac.compare_digest` Bearer token；INGEST_ENABLED 保持 false，cloud-2 接入时 env 置 1 即用
+- **#6 openapi → TS**：`app/api/schemas.py` + `npm run gen:types` → `web/src/types.gen.ts`（提交），services/grm 高频类型 re-export 生成类型（后端加字段漏改 → tsc 编译期报错）；CI 加类型漂移检查
+- **#3 移动端响应式**：768/640/400px 三档媒体查询（侧栏图标栏、DataTable 次要列 sec 隐藏、表格容器横滚、KPI/网格降列）；桌面零回归
+- 线上验证：pytest 57 ✓ / npm 6 ✓ / 10 视图 0 console error ✓ / 390px+768px 0 横向溢出 ✓ / Playwright 截图核验 ✓
 
 **二期增强（2026-08-17）**：
 - 服务台账（issue #2）：约定区自动发现 + 探活 + 域名探测 + 直达分级 + 下线告警（docs/05）
