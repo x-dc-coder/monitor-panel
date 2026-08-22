@@ -1,8 +1,12 @@
 """集中配置：端口/周期/阈值/数据源地址/token/探测对/device_map。
 
-- 敏感项一律从环境变量注入（MONITOR_*），支持本地 .env 文件
+- 敏感项一律从环境变量注入（MONITOR_*），env 文件单一权威源
   （不入 git，云端部署后 chmod 600）。
+- env 文件搜索顺序（issue #1 统一）：已存在的环境变量（systemd/测试注入）
+  > MONITOR_ENV_FILE 显式路径 > /opt/monitor-panel/env（生产权威源，
+  systemd EnvironmentFile 同一文件）> BASE_DIR/.env（本地开发回退）。
 - 本地开发默认 mock=True（无需 cloud 依赖即可跑通全部 API/UI）。
+- 真实模式启动经 validate_config() fail-fast，防止配置丢失静默上线假数据。
 """
 from __future__ import annotations
 
@@ -11,22 +15,42 @@ import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+PROD_ENV_FILE = Path("/opt/monitor-panel/env")
 ENV_FILE = BASE_DIR / ".env"
+
+# 实际加载过的 env 文件（启动日志输出来源，排障用）
+ENV_FILES_LOADED: list[str] = []
+
+
+def _env_file_candidates() -> list[Path]:
+    cands: list[Path] = []
+    explicit = os.environ.get("MONITOR_ENV_FILE", "").strip()
+    if explicit:
+        cands.append(Path(explicit))
+    cands.append(PROD_ENV_FILE)
+    cands.append(ENV_FILE)
+    return cands
 
 
 def _load_env_file() -> None:
-    """极简 .env 解析（KEY=VALUE，支持 # 注释），避免额外依赖。"""
-    if not ENV_FILE.exists():
-        return
-    for raw in ENV_FILE.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
+    """极简 .env 解析（KEY=VALUE，支持 # 注释），避免额外依赖。
+
+    逐候选文件加载，setdefault 语义：已存在的环境变量始终优先，
+    多文件并存时先到先得（顺序见 _env_file_candidates）。
+    """
+    for path in _env_file_candidates():
+        if not path.is_file():
             continue
-        key, _, value = line.partition("=")
-        key = key.strip()
-        value = value.strip().strip('"').strip("'")
-        if key:
-            os.environ.setdefault(key, value)
+        ENV_FILES_LOADED.append(str(path))
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key:
+                os.environ.setdefault(key, value)
 
 
 def _env(key: str, default: str = "") -> str:
@@ -130,6 +154,13 @@ DEVICE_MAP = _env_json("MONITOR_DEVICE_MAP", {
     "oppo-pad-mini": "laptop",
 })
 
+# ================= Release 监控（issue #4：只读聚合 github-release-monitor）=================
+# grm（releases.monitor.dc-sy.cn）与本面板同机部署于 cloud；仓库增删/通知渠道等
+# 配置一律在 grm 侧完成，本面板只读聚合展示，不提供任何配置入口。
+GRM_DATA_PATH = Path(_env("MONITOR_GRM_DATA_PATH",
+                          "/opt/github-release-monitor/data/repositories.json"))
+GRM_BASE_URL = _env("MONITOR_GRM_BASE_URL", "https://releases.monitor.dc-sy.cn")
+
 # ================= 服务台账（issue #2：端口约定驱动自动发现） =================
 # 约定区：自定义项目/网站统一绑定 [lo, hi] 内端口（文档 docs/05-服务台账与端口约定.md），
 # 面板自动扫描该区间完成服务发现 + 探活；区间外固定端口走 manual 登记（db source=manual）。
@@ -158,6 +189,7 @@ INTERVALS = {
     "network": _env_int("MONITOR_INTERVAL_NETWORK", 60),
     "certs": _env_int("MONITOR_INTERVAL_CERTS", 3600),
     "services": _env_int("MONITOR_INTERVAL_SERVICES", 60),
+    "grm": _env_int("MONITOR_INTERVAL_GRM", 300),
 }
 # tailscale ping 语义（评审 F5/E3/E4）
 PING_PACKETS = _env_int("MONITOR_PING_PACKETS", 3)          # 每节点 3 包取中位/最小
@@ -200,3 +232,30 @@ INGEST_TOKEN = _env("MONITOR_INGEST_TOKEN", "")
 
 # ================= 静态资源 =================
 WEB_DIR = BASE_DIR / "web"
+
+
+# ================= 启动校验（issue #1：fail-fast 防静默假数据） =================
+def validate_config() -> list[str]:
+    """返回配置错误清单（main.py lifespan 启动时调用，非空即拒启）。
+
+    - live（真实采集）模式：数据源凭据缺失 = 致命（否则上线空数据面板）
+    - snapshot 模式：数据来自本地快照，无凭据要求
+    - mock 模式：本地开发，无任何必需项
+    """
+    errors: list[str] = []
+    if MOCK and not SNAPSHOT:
+        return errors
+    if SNAPSHOT:
+        return errors
+    if not FRPS_PASS:
+        errors.append("MONITOR_FRPS_PASS 未设置（frps dashboard 密码，live 模式必需）")
+    if not LEGACY_TOKEN:
+        errors.append("MONITOR_LEGACY_TOKEN 未设置（8899 面板 API token，live 模式必需）")
+    return errors
+
+
+def mode_label() -> str:
+    """当前数据模式（healthz/deploy 健康检查共用语义）。"""
+    if MOCK:
+        return "mock"
+    return "snapshot" if SNAPSHOT else "live"

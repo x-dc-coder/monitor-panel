@@ -227,6 +227,14 @@ class Aggregator:
             elif row.get("status") == "open":
                 db.resolve_alerts(src)
 
+    # ---------------- grm（Release 监控：payload → grm_repos 表，只读聚合） ----------------
+    def _on_grm(self, result: CollectorResult, ts: float) -> None:
+        payload = result.payload or {}
+        if payload.get("degraded"):
+            # 数据源不可读：保留上一轮快照不清空、不告警刷屏（frp 降级先例）
+            return
+        db.upsert_grm_repos(result.node_id, payload.get("repos") or [])
+
     # ---------------- 告警 ----------------
     @staticmethod
     def _alert(level: str, source: str, message: str) -> None:
@@ -246,6 +254,7 @@ class Aggregator:
         hs_p = self.latest.get(constants.GROUP_HEADSCALE, {})
         net_p = self.latest.get(constants.GROUP_NETWORK, {})
         probes = net_p.get("probes", [])
+        grm_p = self.latest.get(constants.GROUP_GRM, {})
         updated = max(self.latest_ts.values(), default=None)
         return {
             "mock": config.MOCK,
@@ -288,6 +297,14 @@ class Aggregator:
                 "total": len(probes),
                 "ok": sum(1 for p in probes if p.get("reachable")),
                 "fail": sum(1 for p in probes if not p.get("reachable")),
+            },
+            "grm": {
+                "total": (grm_p.get("summary") or {}).get("total", 0),
+                "with_release": (grm_p.get("summary") or {}).get("with_release", 0),
+                "new_release": (grm_p.get("summary") or {}).get("new_release", 0),
+                "degraded": bool(grm_p.get("degraded")),
+                "error": grm_p.get("error"),
+                "base_url": grm_p.get("base_url"),
             },
             "alerts": {"unresolved": db.count_unresolved_alerts()},
             "nodes": [

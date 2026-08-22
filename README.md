@@ -182,6 +182,24 @@ uvicorn app.main:app --port 8898            # 本地预览（collectors mock=Tru
 - 本地开发默认 `mock=True`（无需 cloud 依赖即可跑通全部 API/UI）
 - 真实数据联调：`ssh -L 8898:127.0.0.1:8898 dc-sy` 隧道（cloud 部署后）或本地直连 cloud 数据源
 
+### 4.1 配置管理（issue #1 统一）
+
+**单一权威源**：生产配置只维护 `/opt/monitor-panel/env`（chmod 600，
+systemd `EnvironmentFile` 与 `app/config.py` 双通道读同一文件）。
+release 目录内不再有 `.env` 副本，release 切换不丢配置。
+
+env 文件加载顺序（`app/config.py`，`setdefault` 语义——已存在的环境变量始终优先）：
+
+1. `MONITOR_ENV_FILE` 显式指定路径
+2. `/opt/monitor-panel/env`（生产权威源）
+3. 仓库根 `.env`（本地开发回退）
+
+**启动校验（fail-fast）**：live 模式下 `MONITOR_FRPS_PASS` / `MONITOR_LEGACY_TOKEN`
+缺失直接拒启（防止配置丢失静默上线空数据面板）；`scripts/deploy.sh` 健康检查
+同时校验 `ok:true` 与 `mode ∈ {live, snapshot}`，回落 mock 视为部署失败自动回滚。
+
+完整变量清单见 `.env.example`（与 `app/config.py` 一一对应）。
+
 ## 5. 上线 Checklist（M4，我审查时逐项核对）
 
 - [ ] DNS：monitor.dc-sy.cn → 124.221.190.237（用户添加）

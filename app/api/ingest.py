@@ -1,11 +1,16 @@
-"""POST /api/ingest：远端 agent 上报预留（二期经 nginx 暴露，本期默认 404）。
+"""POST /api/ingest：远端 agent 上报（cloud-2 接入用，issue #5）。
 
-- 服务仅监听 127.0.0.1，远端节点无法直连 → 二期 nginx 单独 location +
-  Basic Auth + Bearer 双鉴权（评审 E10）；本期默认禁用
+- nginx 对 `location /api/ingest` 已 `auth_basic off`（浏览器 Basic Auth 豁免），
+  防护全部落在本接口的应用层 Bearer token
+- agent 调用方式：`Authorization: Bearer $MONITOR_INGEST_TOKEN`，
+  token 与启用开关均配置于 /opt/monitor-panel/env（见 .env.example ingest 节）
+- token 比较用 hmac.compare_digest（常量时间，抗时序侧信道）
 - 数据契约与自采同构（CollectorResult 批量），启用后零迁移
+- INGEST_ENABLED=0 时返回 404（接口不可发现），启用后无/错 token 返回 401
 """
 from __future__ import annotations
 
+import hmac
 import logging
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -18,11 +23,15 @@ router = APIRouter()
 
 
 def _bearer(authorization: str | None = Header(None)) -> None:
+    """应用层 token 校验（nginx Basic Auth 豁免后的唯一防线）。"""
     if not config.INGEST_ENABLED:
         return
     expected = f"Bearer {config.INGEST_TOKEN}"
-    if authorization != expected:
-        raise HTTPException(status_code=401, detail="invalid token")
+    if not hmac.compare_digest(authorization or "", expected):
+        raise HTTPException(
+            status_code=401,
+            detail="invalid token",
+            headers={"WWW-Authenticate": "Bearer"})
 
 
 @router.post("/ingest", dependencies=[Depends(_bearer)],

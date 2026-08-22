@@ -8,4 +8,4 @@ Type=oneshot
 User=monitor
 Group=monitor
 WorkingDirectory=/opt/monitor-panel
-ExecStart=/usr/bin/bash -c 'mkdir -p /opt/monitor-panel/backups && /usr/bin/sqlite3 /opt/monitor-panel/current/data/monitor.db ".backup /opt/monitor-panel/backups/monitor-$(date +%%F).db" && /usr/bin/find /opt/monitor-panel/backups -maxdepth 1 -name "monitor-*.db" -mtime +14 -delete'
+ExecStart=/usr/bin/bash -c 'mkdir -p /opt/monitor-panel/backups && /usr/bin/sqlite3 /opt/monitor-panel/data/monitor.db ".backup /opt/monitor-panel/backups/monitor-$(date +%%F).db" && /usr/bin/find /opt/monitor-panel/backups -maxdepth 1 -name "monitor-*.db" -mtime +14 -delete'

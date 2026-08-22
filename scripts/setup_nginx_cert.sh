@@ -84,6 +84,19 @@ server {
         root /var/www/html;
     }
 
+    # 远端 agent 上报豁免（issue #5）：agent 无法交互式过 Basic Auth，
+    # 防护落在应用层 Bearer token（app/api/ingest.py，MONITOR_INGEST_TOKEN）
+    location = /api/ingest {
+        auth_basic off;
+        proxy_pass http://$BACKEND;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_read_timeout 30s;
+        limit_except POST { deny all; }
+    }
+
     location / {
         proxy_pass http://$BACKEND;
         proxy_set_header Host \$host;

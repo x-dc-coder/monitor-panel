@@ -15,6 +15,7 @@ GROUP_NETWORK = "network"           # 公网探测对
 GROUP_CERT_DAYS = "cert_days"       # 证书剩余天数
 GROUP_HEADSCALE = "headscale"       # headscale 控制面
 GROUP_SERVICES = "services"         # 服务台账（issue #2：端口约定驱动自动发现）
+GROUP_GRM = "grm"                   # Release 监控（issue #4：聚合 github-release-monitor）
 
 METRIC_GROUPS = (
     GROUP_FRP_TRAFFIC,
@@ -25,6 +26,7 @@ METRIC_GROUPS = (
     GROUP_CERT_DAYS,
     GROUP_HEADSCALE,
     GROUP_SERVICES,
+    GROUP_GRM,
 )
 
 # ---- 各 group 允许的基础指标名 ----
@@ -78,6 +80,11 @@ GROUP_METRICS: dict[str, tuple[str, ...]] = {
     GROUP_SERVICES: (
         "latency_ms",          # latency_ms.<ip:port>
         "reachable",           # reachable.<ip:port> 1/0
+    ),
+    GROUP_GRM: (
+        "repos_total",         # 监控仓库总数
+        "repos_with_release",  # 有最新 release 的仓库数
+        "repos_new",           # 带"新发布"标记的仓库数
     ),
 }
 

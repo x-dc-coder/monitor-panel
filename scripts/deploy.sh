@@ -32,11 +32,13 @@ BACKUPS="$REMOTE_DIR/backups"
 
 health_check() {
   echo "→ 健康检查 (127.0.0.1:8898/api/healthz)…"
-  if ssh "$HOST" "curl -fsS --max-time 10 http://127.0.0.1:8898/api/healthz | grep -q '\"ok\":true'"; then
-    echo "✓ 健康检查通过"
+  # 双重校验（issue #1）：ok:true 之外还要求 mode=live/snapshot——
+  # 曾发生 .env 未跟随 release → 静默回落 mock → 假数据面板照样过检查
+  if ssh "$HOST" "curl -fsS --max-time 10 http://127.0.0.1:8898/api/healthz | grep -q '\"ok\":true' && curl -fsS --max-time 10 http://127.0.0.1:8898/api/healthz | grep -qE '\"mode\":\"(live|snapshot)\"'"; then
+    echo "✓ 健康检查通过（mode 非 mock）"
     return 0
   fi
-  echo "✗ 健康检查失败"
+  echo "✗ 健康检查失败（服务未起或回落 mock：检查 /opt/monitor-panel/env 是否存在且含必需凭据）"
   return 1
 }
 
@@ -81,12 +83,12 @@ ssh "$HOST" "cd '$RELEASE' && if command -v uv >/dev/null 2>&1; then uv venv .ve
 echo "→ release 属主修正为 monitor（服务以 monitor 用户运行）"
 ssh "$HOST" "sudo chown -R monitor:monitor '$RELEASE'"
 
-# 运行态配置与数据（固定路径，不随 release 切换分叉）：
-# - .env: 复制到 release 内（代码读 BASE_DIR/.env），权威源 /opt/monitor-panel/env（systemd）
+# 运行态数据（固定路径，不随 release 切换分叉）：
+# - env: 权威源唯一 = /opt/monitor-panel/env（issue #1 统一；systemd 与 config.py
+#   双通道都读它，release 内不再拷贝 .env 副本，根除双份漂移）
 # - data: 固定 /opt/monitor-panel/data（MONITOR_DB_PATH 指向，避免数据库随 release 分叉）
 ssh "$HOST" "sudo mkdir -p '$REMOTE_DIR/data' && sudo chown monitor:monitor '$REMOTE_DIR/data' && \
-  if [ -f '$REMOTE_DIR/env' ]; then sudo cp '$REMOTE_DIR/env' '$RELEASE/.env'; \
-  sudo chown monitor:monitor '$RELEASE/.env'; sudo chmod 600 '$RELEASE/.env'; fi"
+  if [ ! -f '$REMOTE_DIR/env' ]; then echo '⚠ 警告: $REMOTE_DIR/env 不存在，服务将回落 mock 并被健康检查拦截'; fi"
 
 if switch_and_restart "$RELEASE"; then
   echo "=== 部署成功: $TS ==="

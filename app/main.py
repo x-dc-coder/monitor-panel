@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app import api as api_mod
 from app import config, db
-from app.api import devices, frp, history, ingest, overview, services, system
+from app.api import devices, frp, grm, history, ingest, overview, services, system
 from app.collectors import build_registry
 from app.scheduler import Scheduler
 from app.services.aggregator import Aggregator
@@ -31,6 +31,14 @@ _started = time.time()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # fail-fast：live 模式凭据缺失直接拒启，防止配置丢失静默上线空数据面板（issue #1）
+    cfg_errors = config.validate_config()
+    if cfg_errors:
+        for e in cfg_errors:
+            log.error("config: %s", e)
+        raise RuntimeError(f"config validation failed: {cfg_errors}")
+    log.info("env files loaded: %s", config.ENV_FILES_LOADED or "(none)")
+
     db.init_db()
     registry = build_registry()
     agg = Aggregator()
@@ -57,7 +65,7 @@ async def lifespan(app: FastAPI):
 
     run_task = asyncio.create_task(sched.run())
     app.state.scheduler = sched
-    log.info("monitor-panel started (mock=%s, port=%s)", config.MOCK, config.PORT)
+    log.info("monitor-panel started (mode=%s, port=%s)", config.mode_label(), config.PORT)
     try:
         yield
     finally:
@@ -73,7 +81,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="monitor-panel", version=config.VERSION, lifespan=lifespan)
 
-for router in (overview.router, devices.router, frp.router,
+for router in (overview.router, devices.router, frp.router, grm.router,
                history.router, system.router, services.router, ingest.router):
     app.include_router(router, prefix="/api")
 
@@ -86,6 +94,7 @@ async def healthz():
         "uptime": round(time.time() - _started, 1),
         "version": config.VERSION,
         "mock": config.MOCK,
+        "mode": config.mode_label(),   # mock | snapshot | live（deploy.sh 健康检查用）
         "node": config.NODE_ID,
         "collectors": sched.stats() if sched else {},
     }

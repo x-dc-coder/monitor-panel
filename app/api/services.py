@@ -11,11 +11,13 @@ from fastapi import APIRouter
 
 from app import config, constants, db
 from app.api import ok
+from app.api.schemas import ServicesEnvelope
 
 router = APIRouter()
 
 
-@router.get("/services")
+@router.get("/services", responses={200: {"model": ServicesEnvelope,
+                                           "description": "服务台账"}})
 async def services():
     rows = db.get_services()
     out = []

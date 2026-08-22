@@ -104,6 +104,29 @@ CREATE TABLE IF NOT EXISTS services (
   UNIQUE(node_id, device_id, port)
 );
 CREATE INDEX IF NOT EXISTS idx_services_status ON services(status);
+
+CREATE TABLE IF NOT EXISTS grm_repos (
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  node_id            TEXT NOT NULL,
+  repo_id            TEXT NOT NULL,   -- grm Repository.id（<provider>:owner/repo）
+  url                TEXT,
+  owner_slug         TEXT,            -- owner/repo 显示名
+  display_name       TEXT,            -- grm 侧用户自定义标题
+  tags               TEXT,            -- JSON 数组
+  is_pinned          INT DEFAULT 0,
+  is_new             INT DEFAULT 0,   -- 新发布标记
+  latest_tag         TEXT,
+  latest_name        TEXT,
+  latest_url         TEXT,
+  latest_prerelease  INT DEFAULT 0,
+  published_ts       REAL,
+  readme_summary     TEXT,            -- grm fork 扩展字段（就绪前 NULL，前端占位）
+  recent_commits     TEXT,            -- JSON 数组（就绪前 []）
+  first_seen_ts      REAL,
+  updated_ts         REAL,
+  UNIQUE(node_id, repo_id)
+);
+CREATE INDEX IF NOT EXISTS idx_grm_repos_pinned ON grm_repos(is_pinned);
 """
 
 
@@ -378,6 +401,69 @@ def get_services(node_id: str | None = None,
     sql += " ORDER BY tailscale_ip, port"
     with _lock:
         rows = conn.execute(sql, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ---------------- grm（Release 监控快照：issue #4） ----------------
+_GRM_DEFAULTS = {
+    "url": None, "owner_slug": None, "display_name": None, "tags": "[]",
+    "is_pinned": 0, "is_new": 0, "latest_tag": None, "latest_name": None,
+    "latest_url": None, "latest_prerelease": 0, "published_ts": None,
+    "readme_summary": None, "recent_commits": "[]",
+    "first_seen_ts": None, "updated_ts": None,
+}
+
+
+def upsert_grm_repos(node_id: str, rows: list[dict],
+                     prune: bool = True) -> None:
+    """Release 监控快照 upsert：UNIQUE(node_id, repo_id)，保留 first_seen_ts。
+
+    prune=True 时清除本轮未出现的行——grm 是仓库清单的唯一权威源，
+    仓库在 grm 侧删除后本表同步消失（degraded 轮次由调用方跳过 prune）。
+    """
+    rows = [{**_GRM_DEFAULTS, **r, "node_id": node_id} for r in rows]
+    conn = _cursor()
+    with _lock:
+        if rows:
+            conn.executemany(
+                "INSERT INTO grm_repos(node_id, repo_id, url, owner_slug, "
+                "display_name, tags, is_pinned, is_new, latest_tag, latest_name, "
+                "latest_url, latest_prerelease, published_ts, readme_summary, "
+                "recent_commits, first_seen_ts, updated_ts) "
+                "VALUES (:node_id, :repo_id, :url, :owner_slug, :display_name, "
+                ":tags, :is_pinned, :is_new, :latest_tag, :latest_name, "
+                ":latest_url, :latest_prerelease, :published_ts, :readme_summary, "
+                ":recent_commits, :first_seen_ts, :updated_ts) "
+                "ON CONFLICT(node_id, repo_id) DO UPDATE SET "
+                "url=excluded.url, owner_slug=excluded.owner_slug, "
+                "display_name=excluded.display_name, tags=excluded.tags, "
+                "is_pinned=excluded.is_pinned, is_new=excluded.is_new, "
+                "latest_tag=excluded.latest_tag, latest_name=excluded.latest_name, "
+                "latest_url=excluded.latest_url, "
+                "latest_prerelease=excluded.latest_prerelease, "
+                "published_ts=excluded.published_ts, "
+                "readme_summary=excluded.readme_summary, "
+                "recent_commits=excluded.recent_commits, updated_ts=excluded.updated_ts",
+                rows)
+        if prune:
+            seen = [r["repo_id"] for r in rows]
+            if seen:
+                marks = ",".join("?" * len(seen))
+                conn.execute(
+                    f"DELETE FROM grm_repos WHERE node_id=? "
+                    f"AND repo_id NOT IN ({marks})", [node_id, *seen])
+            else:
+                conn.execute("DELETE FROM grm_repos WHERE node_id=?", [node_id])
+        conn.commit()
+
+
+def get_grm_repos(node_id: str | None = None) -> list[dict]:
+    conn = _cursor()
+    sql = ("SELECT * FROM grm_repos"
+           + (" WHERE node_id=?" if node_id else ""))
+    sql += " ORDER BY is_pinned DESC, owner_slug"
+    with _lock:
+        rows = conn.execute(sql, [node_id] if node_id else []).fetchall()
     return [dict(r) for r in rows]
 
 

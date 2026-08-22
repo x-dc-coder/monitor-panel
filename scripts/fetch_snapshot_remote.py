@@ -19,7 +19,39 @@ os.makedirs(OUT, exist_ok=True)
 TS = time.time()
 NODE = "cloud-1"
 
-# 凭据经环境变量注入（与 .env 同源），不落代码仓库
+
+def _load_env() -> None:
+    """凭据收敛（issue #1）：与 app/config.py 同一搜索顺序加载 env 文件。
+
+    本脚本在 cloud 上经 `cat remote.py | ssh python3 -` 执行（fetch_snapshot.sh），
+    非交互 shell 不继承 .env，故此处显式加载：
+    MONITOR_ENV_FILE > /opt/monitor-panel/env > 脚本同目录 .env。
+    """
+    import pathlib
+    cands = []
+    explicit = os.environ.get("MONITOR_ENV_FILE", "").strip()
+    if explicit:
+        cands.append(pathlib.Path(explicit))
+    cands.append(pathlib.Path("/opt/monitor-panel/env"))
+    try:
+        cands.append(pathlib.Path(__file__).resolve().parent.parent / ".env")
+    except NameError:  # 经 `cat | ssh python3 -` stdin 执行时无 __file__
+        pass
+    for p in cands:
+        if not p.is_file():
+            continue
+        for raw in p.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+        break
+
+
+_load_env()
+
+# 凭据经 env 文件/环境变量注入（与 app/config.py 同源），不落代码仓库
 FRPS_AUTH = (os.environ.get("MONITOR_FRPS_USER", "admin"),
              os.environ.get("MONITOR_FRPS_PASS", ""))   # 取自 /etc/frp/frps.toml
 LEGACY_TOKEN = os.environ.get("MONITOR_LEGACY_TOKEN", "")  # 8899 API_TOKEN

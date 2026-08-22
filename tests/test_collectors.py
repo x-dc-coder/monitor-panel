@@ -17,7 +17,7 @@ def registry():
     return build_registry()
 
 
-@pytest.mark.parametrize("name", ["frp", "tailscale", "headscale", "system", "network", "certs", "services"])
+@pytest.mark.parametrize("name", ["frp", "tailscale", "headscale", "system", "network", "certs", "services", "grm"])
 def test_collector_result_valid(registry, name):
     c = registry[name]
     result = _run(c.run_once())
