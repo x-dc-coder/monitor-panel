@@ -5,7 +5,7 @@
 import { api } from "./api";
 import { S, setCur } from "./state";
 import type {
-  AlertsData, CertsData, DevicesData, FrpData, HealthzData,
+  AlertsData, CertsData, DevicesData, FrpData, GrmData, HealthzData,
   HistoryData, NetworkData, OverviewData, ServicesData,
 } from "./types";
 import { fmtDate, fmtTs } from "./fmt";
@@ -84,6 +84,12 @@ async function pollServices(): Promise<void> {
     if (S.cur === "services") render();
   } catch { /* 静默 */ }
 }
+async function pollReleases(): Promise<void> {
+  try {
+    S.releases = await api<GrmData>("/api/grm");
+    if (S.cur === "releases") render();
+  } catch { /* 静默（grm 降级由 summary.degraded 表达） */ }
+}
 async function pollAlerts(): Promise<void> {
   try {
     S.alerts = await api<AlertsData>("/api/alerts?limit=50");
@@ -153,6 +159,7 @@ function boot(): void {
   void pollCerts();
   void pollProbes();
   void pollServices();
+  void pollReleases();
   void pollAlerts();
   void pollHealthz();
   window.setInterval(() => void pollOverview(), 5000);
@@ -162,6 +169,7 @@ function boot(): void {
   window.setInterval(() => void pollCerts(), 30000);
   window.setInterval(() => void pollProbes(), 30000);
   window.setInterval(() => void pollServices(), 30000);
+  window.setInterval(() => void pollReleases(), 30000);
   window.setInterval(() => void pollHealthz(), 30000);
   window.setInterval(() => void refreshSpark(), 30000);
 }

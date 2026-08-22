@@ -28,14 +28,14 @@ const def: TableDef = {
   cols: [
     { key: "name", label: "HOST" },
     { key: "tailscale_ip", label: "IP", fmt: (d) => '<span class="muted">' + esc(d.tailscale_ip) + "</span>" },
-    { key: "os", label: "OS", filterable: true, fmt: (d) => esc(d.os || "—") },
+    { key: "os", label: "OS", filterable: true, sec: true, fmt: (d) => esc(d.os || "—") },
     { key: "status", label: "状态", filterable: true, fmt: statusCell },
     {
       key: "relay", label: "路径",
       fmt: (d) => '<span class="dim2">' + (d.relay ? "DERP(" + esc(d.relay) + ")" : "直连") + "</span>",
     },
     { key: "latency_ms", label: "延迟(中位)", fmt: latCell },
-    { key: "mapped_8899", label: "8899", fmt: (d) => '<span class="muted">' + esc(d.mapped_8899 || "—") + "</span>" },
+    { key: "mapped_8899", label: "8899", sec: true, fmt: (d) => '<span class="muted">' + esc(d.mapped_8899 || "—") + "</span>" },
     { key: "ping", label: "", fmt: pingCell },
   ],
   groupBy: "status",

@@ -1,6 +1,6 @@
 /** 轮询结果缓存：pollers 写入，视图读取；切换视图时立即刷新。 */
 import type {
-  AlertsData, CertsData, DevicesData, FrpData, HealthzData,
+  AlertsData, CertsData, DevicesData, FrpData, GrmData, HealthzData,
   NetworkData, OverviewData, ServicesData,
 } from "./types";
 
@@ -18,6 +18,7 @@ export const S: {
   certs: CertsData | null;
   probes: NetworkData | null;
   services: ServicesData | null;
+  releases: GrmData | null;
   alerts: AlertsData | null;
   healthz: HealthzData | null;
   spark: SparkCache;
@@ -31,6 +32,7 @@ export const S: {
   certs: null,
   probes: null,
   services: null,
+  releases: null,
   alerts: null,
   healthz: null,
   spark: { cpu: null, mem: null, frp: null, ts: null },

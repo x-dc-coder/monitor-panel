@@ -206,8 +206,13 @@ select.tbtn option{background:var(--bg2);color:var(--fg)}
 .ps-bar i{display:block;height:100%;background:var(--cy)}
 .legend{display:flex;gap:14px;flex-wrap:wrap;padding:8px 14px 10px;font-size:10px;color:var(--faint)}
 
-/* ================= 移动端 ================= */
-@media(max-width:760px){
+/* ================= 移动端（issue #3：390/768px 响应式，桌面零改动） ================= */
+/* 表格兜底：容器横滚（tb() 与 DataTable 共用），配合次要列隐藏优先保关键列 */
+.twrap,.win .body{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.twrap{min-width:0}
+
+/* 平板（≤768px）：侧栏收窄为图标栏，间距收紧 */
+@media(max-width:768px){
   .nav{width:52px;flex:0 0 52px}
   .nav .logo{padding:12px 0;text-align:center}
   .nav .logo .t1{font-size:12px}
@@ -217,11 +222,55 @@ select.tbtn option{background:var(--bg2);color:var(--fg)}
   .view{padding:14px 12px 36px}
   .statusbar .seg{padding:6px 9px}
   .statusbar .lbl{display:none}
+  .view h1{font-size:15.5px;gap:8px}
+  .win td,.win th{padding:6px 10px}
+}
+
+/* 手机（≤640px）：次要列隐藏（table.ts sec 标记），卡片网格单列 */
+@media(max-width:640px){
+  .col-sec{display:none}
+  .grid2,.grid3{grid-template-columns:1fr}
+  .rm-grid{gap:10px}
+  .kpis{gap:8px}
+  .kpi{min-height:78px;padding:9px 11px}
+  .kpi .v{font-size:18px}
+  .kpi .t{padding-right:64px}
+  .view h1{font-size:14px}
+  .view .hint{font-size:10.5px}
+  .tbar{gap:6px;padding:6px 8px}
+  .statusbar .right{margin-left:0}
+  .logline .ts{flex-basis:56px}
+}
+
+/* 小屏手机（≤400px，iPhone 12/13/14 ~390px） */
+@media(max-width:400px){
+  .nav{width:44px;flex:0 0 44px}
+  .view{padding:10px 8px 30px}
+  .kpis{grid-template-columns:1fr 1fr}
+  .statusbar{font-size:10px}
+  .statusbar .seg{padding:5px 6px}
 }
 
 /* 服务直达链接可达性标记 */
 .badge{display:inline-block;padding:1px 6px;border-radius:8px;font-size:10px;background:rgba(128,128,128,.15);color:var(--faint);border:1px solid rgba(128,128,128,.25);white-space:nowrap}
 .badge[title]{cursor:help}
+/* 小号辅助文本（存量 HTML 已用 class="muted sm"，此处补齐定义） */
+.sm{font-size:11px;line-height:1.5}
+
+/* 外链（服务直达 / Release 监控仓库与 release 跳转） */
+.lnk{color:var(--cy);text-decoration:none;border-bottom:1px dotted rgba(90,220,200,.4)}
+.lnk:hover{color:var(--fg);border-bottom-color:var(--cy)}
+
+/* ================= Release 监控（issue #4：grm 只读聚合卡片） ================= */
+.rm-grid{margin-top:14px}
+.rm-card{padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.rm-head{display:flex;flex-direction:column;gap:2px;font-size:13px;font-weight:600}
+.rm-head .lnk{font-size:13px}
+.rm-tags{display:flex;flex-wrap:wrap;gap:4px}
+.rm-rel{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.rm-rel .lnk{font-size:12.5px;font-weight:600;color:var(--ok)}
+.rm-rel .lnk:hover{color:var(--fg)}
+.rm-ov{padding:12px 14px;font-size:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 
 /* ================= 通用 DataTable：筛选条 / 聚合 / 分页 ================= */
 .twrap{display:flex;flex-direction:column;gap:8px}

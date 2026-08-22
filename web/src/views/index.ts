@@ -6,6 +6,7 @@ import { renderDevices } from "./devices";
 import { renderLinks } from "./links";
 import { renderOverview } from "./overview";
 import { renderProbes } from "./probes";
+import { renderReleases } from "./releases";
 import { renderServices } from "./services";
 import { renderSettings } from "./settings";
 import { renderTunnels } from "./tunnels";
@@ -13,7 +14,7 @@ import { renderTunnels } from "./tunnels";
 /** 视图 id 字面量联合：漏注册/拼错在编译期报错 */
 export type ViewId =
   | "overview" | "devices" | "tunnels" | "links"
-  | "services" | "probes" | "certs" | "alerts" | "settings";
+  | "services" | "releases" | "probes" | "certs" | "alerts" | "settings";
 
 export type ViewRenderer = () => string;
 
@@ -23,6 +24,7 @@ export const views: Record<ViewId, ViewRenderer> = {
   tunnels: renderTunnels,
   links: renderLinks,
   services: renderServices,
+  releases: renderReleases,
   probes: renderProbes,
   certs: renderCerts,
   alerts: renderAlerts,

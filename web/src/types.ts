@@ -59,6 +59,14 @@ export interface NetworkSummary {
   ok: number;
   fail: number;
 }
+export interface GrmSummary {
+  total: number;
+  with_release: number;
+  new_release: number;
+  degraded: boolean;
+  error: string | null;
+  base_url: string | null;
+}
 export interface NodeInfo {
   id: string;
   role?: string;
@@ -74,6 +82,7 @@ export interface OverviewData {
   headscale: HeadscaleSummary;
   certs: CertsSummary;
   network: NetworkSummary;
+  grm?: GrmSummary;
   alerts: { unresolved: number };
   nodes: NodeInfo[];
 }
@@ -175,33 +184,19 @@ export interface NetworkData {
   ts: number | null;
 }
 
-/* ---------------- /api/services ---------------- */
-export interface ServiceRow {
-  device_id: string;
-  device_name: string | null;
-  tailscale_ip: string | null;
-  port: number;
-  name: string | null;
-  auto_name: string | null;
-  protocol: string | null;
-  url: string | null;
-  public_url: string | null;
-  http_status: number | null;
-  latency_ms: number | null;
-  status: string;
-  missing_rounds: number;
-  source: string;
-  enabled: boolean;
-  first_seen_ts: number | null;
-  last_seen_ts: number | null;
-  updated_ts: number | null;
-}
-export interface ServicesData {
-  services: ServiceRow[];
-  range: [number, number];
-  summary: { total: number; open: number; closed: number; manual: number };
-  ts: number;
-}
+/* ---------------- /api/services ----------------
+ * 类型来源：types.gen.ts（npm run gen:types，issue #6）——后端 app/api/schemas.py
+ * 是唯一权威，API 加字段漏改这里 → tsc 编译期报错。 */
+import type { components } from "./types.gen";
+
+export type ServiceRow = components["schemas"]["ServiceItem"];
+export type ServicesData = components["schemas"]["ServicesData"];
+
+/* ---------------- /api/grm（issue #4：Release 监控只读聚合） ----------------
+ * 类型来源：types.gen.ts（同 services，后端 schemas.py 权威） */
+export type GrmRelease = components["schemas"]["GrmLatest"];
+export type GrmRepoRow = components["schemas"]["GrmRepo"];
+export type GrmData = components["schemas"]["GrmApiData"];
 
 /* ---------------- /api/alerts ---------------- */
 export type AlertLevel = "info" | "warn" | "crit";

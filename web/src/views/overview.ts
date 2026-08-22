@@ -32,6 +32,7 @@ export function renderOverview(): string {
       win("等待数据", "首次采集 ~2s", '<div class="empty">正在连接后端 API…</div>');
   }
   const f = o.frp, t = o.tailscale, s = o.system, c = o.certs, n = o.network, h = o.headscale;
+  const g = o.grm;
   const certBad = (c.warn || 0) + (c.crit || 0);
   const expiring = c.expiring && c.expiring[0];
   const disk = s.disk && (s.disk["/"] || Object.values(s.disk)[0]);
@@ -86,5 +87,17 @@ export function renderOverview(): string {
         (S.certs ? S.certs.certs : []).map((c2) =>
           "<tr><td>" + esc(c2.domain) + '</td><td class="muted">' + esc(c2.not_after || "—") +
           '</td><td class="num">' + Math.round(c2.days_left) + ' 天</td><td>' +
-          st(statusLevel(c2.status), c2.status) + "</td></tr>").join("")));
+          st(statusLevel(c2.status), c2.status) + "</td></tr>").join(""))) +
+    win("Release 监控 · grm", g ? "releases.monitor.dc-sy.cn · 5min" : "未采集",
+      g ? (
+        '<div class="rm-ov">' +
+        (g.degraded
+          ? st("warn", "降级") + '<span class="muted sm">grm 数据源不可读，其余区块不受影响</span>'
+          : st("ok", "正常") + '<span class="muted sm">仓库 ' + g.total + " · 有 release " +
+            g.with_release + (g.new_release ? ' · <b style="color:var(--ok)">NEW ' + g.new_release + "</b>" : "") +
+            "</span>") +
+        (g.base_url ? ' · <a class="lnk" href="' + esc(g.base_url) +
+          '" target="_blank" rel="noopener">详情</a> · <a class="lnk" href="#/releases">区块</a>' : "") +
+        "</div>"
+      ) : '<div class="empty">等待采集（5min 周期，首轮 ~5s）</div>');
 }

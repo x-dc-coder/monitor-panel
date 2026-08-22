@@ -8,10 +8,12 @@
     "build:dev": "esbuild web/src/main.ts --bundle --outfile=web/dist/app.js --sourcemap",
     "watch": "esbuild web/src/main.ts --bundle --outfile=web/dist/app.js --sourcemap --watch",
     "typecheck": "tsc --noEmit",
-    "test": "esbuild tests/table.test.ts --bundle --platform=node --format=cjs --outfile=/tmp/table.test.cjs && node --test /tmp/table.test.cjs"
+    "test": "esbuild tests/table.test.ts --bundle --platform=node --format=cjs --outfile=/tmp/table.test.cjs && node --test /tmp/table.test.cjs",
+    "gen:types": "node scripts/gen_types.js"
   },
   "devDependencies": {
     "esbuild": "^0.24.0",
+    "openapi-typescript": "^7.13.0",
     "typescript": "^5.6.0"
   }
 }

@@ -33,6 +33,12 @@ jobs:
       - name: 前端类型检查（tsc）
         run: npm run typecheck
 
+      - name: openapi 类型漂移检查（issue #6）
+        run: |
+          npm run gen:types
+          git diff --exit-code -- web/src/types.gen.ts || {
+            echo "types.gen.ts 与后端 openapi 漂移：请本地 npm run gen:types 并提交"; exit 1; }
+
       - name: 前端单测（node --test）
         run: npm test
 

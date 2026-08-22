@@ -57,12 +57,12 @@ const def: TableDef = {
           ? '<div class="muted sm">' + esc(r.auto_name) + "</div>" : ""),
     },
     {
-      key: "protocol", label: "协议", filterable: true,
+      key: "protocol", label: "协议", filterable: true, sec: true,
       fmt: (r) => esc(r.protocol || "tcp") + (r.http_status ? " " + r.http_status : ""),
     },
     { key: "status", label: "状态", filterable: true, fmt: statusTxt },
     {
-      key: "latency_ms", label: "延迟",
+      key: "latency_ms", label: "延迟", sec: true,
       fmt: (r) => (r.status === "open" ? '<span class="num">' + fmtMs(r.latency_ms) + "</span>" : "—"),
     },
     { key: "url", label: "直达", fmt: linkCell },

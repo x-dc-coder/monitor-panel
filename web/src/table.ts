@@ -20,6 +20,7 @@ export interface ColDef {
   fmt?: (row: any) => string;   // 单元格格式化（默认 String(row[key])）
   filterable?: boolean;         // 参与列头下拉筛选
   filterMap?: Record<string, string>;  // 筛选下拉值 → 显示名（如 0→"未解决"）
+  sec?: boolean;               // 次要列：移动端（<640px）隐藏，保关键列优先（issue #3）
 }
 
 export interface TableDef {
@@ -153,12 +154,13 @@ export function table<T>(def: TableDef, rows: T[], viewId: string): string {
   }
 
   // 表头 + 行
-  const head = "<thead><tr>" + def.cols.map((c) => "<th>" + esc(c.label) + "</th>").join("") +
+  const head = "<thead><tr>" + def.cols.map((c) =>
+    '<th class="' + (c.sec ? "col-sec" : "") + '">' + esc(c.label) + "</th>").join("") +
     "</tr></thead>";
   const body = pageRowsOut.length
     ? pageRowsOut.map((r) => "<tr>" + def.cols.map((c) => {
         const v = c.fmt ? c.fmt(r) : String((r as any)[c.key] ?? "");
-        return "<td>" + v + "</td>";
+        return '<td class="' + (c.sec ? "col-sec" : "") + '">' + v + "</td>";
       }).join("") + "</tr>").join("")
     : '<tr><td colspan="' + def.cols.length + '" class="empty">' +
       esc(def.emptyMsg || "无数据 · 试试调整筛选") + "</td></tr>";

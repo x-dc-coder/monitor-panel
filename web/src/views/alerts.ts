@@ -29,7 +29,7 @@ const def: TableDef = {
       key: "resolved", label: "状态", filterable: true, fmt: resCell,
       filterMap: { "0": "未解决", "1": "已解决" },
     },
-    { key: "source", label: "来源", fmt: (a) => '<span class="muted">' + esc(a.source) + "</span>" },
+    { key: "source", label: "来源", sec: true, fmt: (a) => '<span class="muted">' + esc(a.source) + "</span>" },
     { key: "message", label: "消息", fmt: msgCell },
   ],
   groupBy: "level",
