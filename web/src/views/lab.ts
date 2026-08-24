@@ -1,7 +1,10 @@
 /** 实验视图（lab）：本机实验监控（lab-monitor 转发器上报，issue #11）。
- *  数据源：/api/overview 的 lab 段（转发器 30s 上报，overview 5s 轮询兜底）。 */
+ *  数据源：/api/overview 的 lab 段（转发器 30s 上报，overview 5s 轮询兜底）。
+ *  #13-2 趋势图：/api/history（samples 通道，1h/24h 降采样，ASCII chart）。 */
+import { chart } from "../ascii";
+import { api } from "../api";
 import { S } from "../state";
-import type { LabSummary } from "../types";
+import type { HistoryData, LabSummary } from "../types";
 import { esc, pageHead, st, win } from "../ui";
 
 function fmtDur(startTs?: number): string {
@@ -92,10 +95,56 @@ export function renderLab(): string {
       "<span>已跑 " + fmtDur(exp.startTs) + "</span></div></div>"
     : '<div class="empty">当前无活跃实验（累计 ' + (lab.experiments_total ?? 0) + " 次已完成）</div>";
 
+  // #13-2 趋势图区块（数据由 bindLab() 异步填充）
+  const trend =
+    '<div class="lab-trend">' +
+    '<div class="lab-trend-head">' +
+    '<span class="lt-title">GPU 趋势 · samples 通道</span>' +
+    '<span class="lt-ctl"><select id="lab-range">' +
+    '<option value="1h">1h</option><option value="24h" selected>24h</option>' +
+    '</select> <button type="button" id="lab-refresh" class="tbtn">[刷新]</button></span>' +
+    "</div>" +
+    '<div class="lab-trend-grid">' +
+    '<div class="lgauge"><div class="lt">GPU 利用率 %</div><div id="lab-chart-util"><div class="acchart"><pre class="muted">  loading…</pre></div></div></div>' +
+    '<div class="lgauge"><div class="lt">显存占用 MiB</div><div id="lab-chart-vram"><div class="acchart"><pre class="muted">  loading…</pre></div></div></div>' +
+    "</div></div>";
+
   // 最近实验历史（从 ended 无直连数据——此处展示 overview 已透出的摘要）
   const histHint =
     '<div class="muted sm" style="margin-top:10px">实验历史明细与 GPU 趋势见本机 lab-monitor 面板；' +
     "此处为远端汇总（转发器 30s 上报）。</div>";
 
-  return head + statusRow + gauges + win("当前实验", "live", expCard + histHint);
+  return head + statusRow + gauges + win("当前实验", "live", expCard + histHint) + trend;
+}
+
+/** 趋势图数据加载（lab 视图渲染后由 bindLab 绑定） */
+async function loadLabChart(boxId: string, metric: string, range: string, fmt: (v: number) => string): Promise<void> {
+  const box = document.getElementById(boxId);
+  if (!box) return;
+  try {
+    const j = await api<HistoryData>("/api/history?metric=" + encodeURIComponent(metric) +
+      "&group=lab_monitor&range=" + encodeURIComponent(range));
+    if (j.points.length === 0) {
+      box.innerHTML = '<div class="acchart"><pre class="muted">  no data — 等待采样积累（30s 周期）</pre></div>';
+      return;
+    }
+    box.innerHTML = chart(j.points, { title: metric, fmt });
+  } catch (e) {
+    box.innerHTML = '<div class="acchart"><pre class="muted">  ✕ ' + esc((e as Error).message) + "</pre></div>";
+  }
+}
+
+/** lab 视图交互绑定（main.ts bindView 调用） */
+export function bindLab(): void {
+  const rng = document.getElementById("lab-range") as HTMLSelectElement | null;
+  const ref = document.getElementById("lab-refresh") as HTMLButtonElement | null;
+  if (!rng || !ref) return;
+  const load = (): void => {
+    const range = rng.value;
+    void loadLabChart("lab-chart-util", "gpu_util_percent", range, (v) => v + "%");
+    void loadLabChart("lab-chart-vram", "vram_used_mib", range, (v) => v + " MiB");
+  };
+  rng.addEventListener("change", load);
+  ref.addEventListener("click", load);
+  load();
 }

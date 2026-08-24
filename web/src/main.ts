@@ -134,6 +134,7 @@ function bindView(v: string): void {
   if (v === "devices") void import("./views/devices").then((m) => m.bindPing());
   if (v === "links") void import("./views/links").then((m) => m.bindLinks());
   if (v === "probes") void import("./views/probes").then((m) => m.renderProbeOut());
+  if (v === "lab") void import("./views/lab").then((m) => m.bindLab());
   // 通用表格交互（分页/筛选/分组）——各视图渲染后挂载
   void import("./table").then((m) => m.bindTableForView(v));
 }
