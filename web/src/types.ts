@@ -67,6 +67,23 @@ export interface GrmSummary {
   error: string | null;
   base_url: string | null;
 }
+export interface LabSummary {
+  gpu_util_percent: number | null;
+  vram_used_mib: number | null;
+  vram_total_mib: number | null;
+  vram_util_percent: number | null;
+  gpu_temp_c: number | null;
+  experiment_active: number | null;
+  experiments_total: number | null;
+  alerts_crit: number | null;
+  alerts_warn: number | null;
+  monitor_enabled: number | null;
+  experiment: {
+    cmd?: string;
+    type?: string;
+    startTs?: number;
+  } | null;
+}
 export interface NodeInfo {
   id: string;
   role?: string;
@@ -83,6 +100,7 @@ export interface OverviewData {
   certs: CertsSummary;
   network: NetworkSummary;
   grm?: GrmSummary;
+  lab?: LabSummary;
   alerts: { unresolved: number };
   nodes: NodeInfo[];
 }

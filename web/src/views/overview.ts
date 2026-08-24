@@ -63,6 +63,13 @@ export function renderOverview(): string {
       c.total != null ? c.total + " 张" : "—", certBad ? "warn" : "", "amber", "cpu") +
     kpi("06", "PROBES", probesOk, "可达",
       (n.fail || 0) + " fail", "共 " + (n.total || 0) + " 目标", "", "", "cpu") +
+    kpi("07", "LAB GPU",
+      o.lab && o.lab.vram_used_mib != null && o.lab.vram_total_mib
+        ? fmtBytes(o.lab.vram_used_mib * 1048576) + " / " + fmtBytes(o.lab.vram_total_mib * 1048576)
+        : "—", o.lab && o.lab.vram_util_percent != null ? o.lab.vram_util_percent + "%" : "",
+      "util " + (o.lab && o.lab.gpu_util_percent != null ? o.lab.gpu_util_percent + "%" : "—"),
+      "temp " + (o.lab && o.lab.gpu_temp_c != null ? o.lab.gpu_temp_c + "°C" : "—"),
+      o.lab && o.lab.monitor_enabled === 0 ? "paused" : "", "violet", "lab") +
     "</div>" +
     '<div class="grid2">' +
     win("设备 · devices", "tailscale status --json · 30s",
@@ -99,5 +106,26 @@ export function renderOverview(): string {
         (g.base_url ? ' · <a class="lnk" href="' + esc(g.base_url) +
           '" target="_blank" rel="noopener">详情</a> · <a class="lnk" href="#/releases">区块</a>' : "") +
         "</div>"
-      ) : '<div class="empty">等待采集（5min 周期，首轮 ~5s）</div>');
+      ) : '<div class="empty">等待采集（5min 周期，首轮 ~5s）</div>') +
+    win("实验 · lab-monitor", o.lab ? "dc-desktop · 30s" : "未接入",
+      o.lab ? (
+        '<div class="rm-ov">' +
+        (o.lab.monitor_enabled === 1 ? st("ok", "监控中") : st("warn", "已暂停")) +
+        '<span class="muted sm">活跃实验 ' + (o.lab.experiment_active ?? 0) + " · 累计 " +
+        (o.lab.experiments_total ?? 0) + " · 告警 " +
+        (o.lab.alerts_crit ? '<b style="color:var(--crit)">' + o.lab.alerts_crit + " crit</b> " : "") +
+        (o.lab.alerts_warn ? '<span style="color:var(--warn)">' + o.lab.alerts_warn + " warn</span>" : "0") +
+        "</span></div>" +
+        (o.lab.experiment
+          ? '<div class="rm-ov" style="margin-top:8px"><b>▶ ' + esc(o.lab.experiment.cmd || "实验") + "</b>" +
+            '<span class="muted sm"> · ' + esc(o.lab.experiment.type || "?") +
+            (o.lab.experiment.startTs
+              ? " · 已跑 " + (function (diffMs: number): string {
+                  const m = Math.floor(diffMs / 60000);
+                  return m >= 60 ? Math.floor(m / 60) + "h" + (m % 60) + "m" : m + "m";
+                })(Date.now() - o.lab.experiment.startTs)
+              : "") +
+            "</span></div>"
+          : '<div class="empty">当前无活跃实验</div>')
+      ) : '<div class="empty">未接入（转发器未上报）</div>');
 }

@@ -324,6 +324,7 @@ class Aggregator:
         net_p = self.latest.get(constants.GROUP_NETWORK, {})
         probes = net_p.get("probes", [])
         grm_p = self.latest.get(constants.GROUP_GRM, {})
+        lab_p = self.latest.get(constants.GROUP_LAB, {})
         updated = max(self.latest_ts.values(), default=None)
         return {
             "mock": config.MOCK,
@@ -374,6 +375,19 @@ class Aggregator:
                 "degraded": bool(grm_p.get("degraded")),
                 "error": grm_p.get("error"),
                 "base_url": grm_p.get("base_url"),
+            },
+            "lab": {
+                "gpu_util_percent": lab_p.get("gpu_util_percent"),
+                "vram_used_mib": lab_p.get("vram_used_mib"),
+                "vram_total_mib": lab_p.get("vram_total_mib"),
+                "vram_util_percent": lab_p.get("vram_util_percent"),
+                "gpu_temp_c": lab_p.get("gpu_temp_c"),
+                "experiment_active": lab_p.get("experiment_active"),
+                "experiments_total": lab_p.get("experiments_total"),
+                "alerts_crit": lab_p.get("alerts_crit"),
+                "alerts_warn": lab_p.get("alerts_warn"),
+                "monitor_enabled": lab_p.get("monitor_enabled"),
+                "experiment": lab_p.get("experiment"),
             },
             "alerts": {"unresolved": db.count_unresolved_alerts()},
             "nodes": [

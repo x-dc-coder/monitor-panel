@@ -108,6 +108,7 @@ const SPARK_METRICS: Record<keyof typeof S.spark, [string, string]> = {
   mem: ["mem_percent", "system"],
   frp: ["total_traffic_in", "frp_traffic"],
   ts: ["nodes_total", "headscale"],
+  lab: ["gpu_util_percent", "lab_monitor"],
 };
 
 /** overview KPI 的 sparkline 数据（24h 降采样最后 9 点，30s 刷新一次） */

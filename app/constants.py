@@ -16,6 +16,7 @@ GROUP_CERT_DAYS = "cert_days"       # 证书剩余天数
 GROUP_HEADSCALE = "headscale"       # headscale 控制面
 GROUP_SERVICES = "services"         # 服务台账（issue #2：端口约定驱动自动发现）
 GROUP_GRM = "grm"                   # Release 监控（issue #4：聚合 github-release-monitor）
+GROUP_LAB = "lab_monitor"           # 本机实验监控（lab-monitor 转发器上报，issue #11）
 
 METRIC_GROUPS = (
     GROUP_FRP_TRAFFIC,
@@ -27,6 +28,7 @@ METRIC_GROUPS = (
     GROUP_HEADSCALE,
     GROUP_SERVICES,
     GROUP_GRM,
+    GROUP_LAB,
 )
 
 # ---- 各 group 允许的基础指标名 ----
@@ -85,6 +87,18 @@ GROUP_METRICS: dict[str, tuple[str, ...]] = {
         "repos_total",         # 监控仓库总数
         "repos_with_release",  # 有最新 release 的仓库数
         "repos_new",           # 带"新发布"标记的仓库数
+    ),
+    GROUP_LAB: (
+        "gpu_util_percent",    # GPU 利用率 %
+        "vram_used_mib",       # 显存已用 MiB
+        "vram_total_mib",      # 显存总量 MiB
+        "vram_util_percent",   # 显存占用 %
+        "gpu_temp_c",          # 温度 °C
+        "experiment_active",   # 当前活跃实验数
+        "experiments_total",   # 累计归档实验数
+        "alerts_crit",         # 未解决 critical 告警数
+        "alerts_warn",         # 未解决 warn 告警数
+        "monitor_enabled",     # 引擎开关 1/0
     ),
 }
 

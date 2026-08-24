@@ -9,6 +9,7 @@ export interface SparkCache {
   mem: number[] | null;
   frp: number[] | null;
   ts: number[] | null;
+  lab: number[] | null;
 }
 
 export const S: {
@@ -35,7 +36,7 @@ export const S: {
   releases: null,
   alerts: null,
   healthz: null,
-  spark: { cpu: null, mem: null, frp: null, ts: null },
+  spark: { cpu: null, mem: null, frp: null, ts: null, lab: null },
   cur: "overview",
   pingLog: null,
 };
