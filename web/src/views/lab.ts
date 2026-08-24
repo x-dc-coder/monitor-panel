@@ -21,14 +21,14 @@ function fmtTs(ts?: number): string {
   return p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
 }
 
-function gauge(label: string, valText: string, pct: number | null, cls = ""): string {
+function gauge(label: string, valText: string, pct: number | null, cls = "", showPct = true): string {
   const bar = pct != null
     ? '<div class="lbar"><div class="lfill' + (cls ? " " + cls : "") + '" style="width:' +
       Math.min(pct, 100) + '%"></div></div>'
     : '<div class="lbar empty"></div>';
   return '<div class="lgauge"><div class="lt">' + esc(label) + "</div>" +
     '<div class="lv">' + valText + "</div>" +
-    bar + (pct != null ? '<div class="lsub">' + pct + "%</div>" : "") + "</div>";
+    bar + (pct != null && showPct ? '<div class="lsub">' + pct + "%</div>" : "") + "</div>";
 }
 
 /** 温度进度颜色分级：<50 绿 / 50-80 黄 / >80 红（与告警 tempWarn 对齐） */
@@ -79,7 +79,8 @@ export function renderLab(): string {
     gauge("温度 °C",
       temp != null ? temp + "°C" : "—",
       temp != null ? Math.round(temp) : null,
-      tempCls(temp)) +
+      tempCls(temp),
+      false) +   // 温度不显示百分比标注（40°C 非"占用 40%"）
     "</div>";
 
   // 当前实验详情
