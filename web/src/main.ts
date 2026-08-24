@@ -38,6 +38,8 @@ function renderStatusbar(): void {
   dot("devices", t.total > 0 ? (t.online === t.total ? "ok" : "warn") : "off");
   dot("certs", (c.crit || 0) > 0 ? "crit" : (c.warn || 0) > 0 ? "warn" : "ok");
   dot("alerts", (o.alerts && o.alerts.unresolved) > 0 ? "crit" : "ok");
+  const lab = o.lab;
+  dot("lab", !lab ? "off" : lab.monitor_enabled === 1 ? "ok" : "warn");
   document.getElementById("foot-node")!.textContent =
     (o.nodes && o.nodes[0] && o.nodes[0].id) || "—";
   const modeTxt = o.mode === "snapshot" ? "SNAPSHOT" : o.mock ? "MOCK" : "实时";

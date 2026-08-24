@@ -206,6 +206,24 @@ select.tbtn option{background:var(--bg2);color:var(--fg)}
 .ps-bar i{display:block;height:100%;background:var(--cy)}
 .legend{display:flex;gap:14px;flex-wrap:wrap;padding:8px 14px 10px;font-size:10px;color:var(--faint)}
 
+/* ================= 实验视图（lab，issue #11） ================= */
+.lab-status{display:flex;align-items:center;gap:4px;flex-wrap:wrap;font-size:12px;padding:2px 0 12px}
+.lab-status .muted{color:var(--faint)}
+.lab-gauges{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px}
+@media(max-width:1080px){.lab-gauges{grid-template-columns:1fr}}
+.lgauge{background:var(--bg2);border:1px solid var(--line);padding:13px 15px}
+.lgauge .lt{color:var(--faint);font-size:10px;letter-spacing:.12em}
+.lgauge .lv{font-size:20px;font-weight:700;margin-top:5px;font-variant-numeric:tabular-nums}
+.lgauge .lv small{font-size:11px;color:var(--dim);font-weight:400}
+.lbar{height:6px;background:var(--bg3);border:1px solid var(--line2);margin-top:8px;position:relative}
+.lbar.empty{opacity:.4}
+.lfill{height:100%;background:var(--cy);box-shadow:0 0 6px var(--cyglow);transition:width .5s}
+.lsub{color:var(--faint);font-size:10px;margin-top:4px}
+.lab-exp-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.lab-exp-head .badge{background:var(--bg3);border:1px solid var(--line2);color:var(--cy);font-size:10px;padding:1px 8px;border-radius:3px}
+.lab-exp-cmd{font-family:var(--mono);font-size:11.5px;color:var(--dim);word-break:break-all;background:var(--bg3);border:1px solid var(--line2);padding:8px 10px;margin-bottom:8px;line-height:1.5}
+.lab-exp-meta{display:flex;gap:18px;font-size:11px;color:var(--faint)}
+
 /* ================= 移动端（issue #3：390/768px 响应式，桌面零改动） ================= */
 /* 表格兜底：容器横滚（tb() 与 DataTable 共用），配合次要列隐藏优先保关键列 */
 .twrap,.win .body{overflow-x:auto;-webkit-overflow-scrolling:touch}

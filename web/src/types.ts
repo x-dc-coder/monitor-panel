@@ -79,6 +79,7 @@ export interface LabSummary {
   alerts_warn: number | null;
   monitor_enabled: number | null;
   experiment: {
+    runId?: string;
     cmd?: string;
     type?: string;
     startTs?: number;

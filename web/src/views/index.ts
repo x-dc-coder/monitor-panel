@@ -3,6 +3,7 @@ import { esc, pageHead } from "../ui";
 import { renderAlerts } from "./alerts";
 import { renderCerts } from "./certs";
 import { renderDevices } from "./devices";
+import { renderLab } from "./lab";
 import { renderLinks } from "./links";
 import { renderOverview } from "./overview";
 import { renderProbes } from "./probes";
@@ -14,7 +15,8 @@ import { renderTunnels } from "./tunnels";
 /** 视图 id 字面量联合：漏注册/拼错在编译期报错 */
 export type ViewId =
   | "overview" | "devices" | "tunnels" | "links"
-  | "services" | "releases" | "probes" | "certs" | "alerts" | "settings";
+  | "services" | "releases" | "probes" | "certs" | "alerts"
+  | "lab" | "settings";
 
 export type ViewRenderer = () => string;
 
@@ -28,6 +30,7 @@ export const views: Record<ViewId, ViewRenderer> = {
   probes: renderProbes,
   certs: renderCerts,
   alerts: renderAlerts,
+  lab: renderLab,
   settings: renderSettings,
 };
 
