@@ -53,7 +53,8 @@ async function pollOverview(): Promise<void> {
   try {
     S.overview = await api<OverviewData>("/api/overview");
     renderStatusbar();
-    if (S.cur === "overview") render();
+    // overview 与 lab 视图共用 overview 数据，两者都需在轮询时重渲染
+    if (S.cur === "overview" || S.cur === "lab") render();
   } catch { /* 网络暂断静默（保留旧数据） */ }
 }
 async function pollDevices(): Promise<void> {
