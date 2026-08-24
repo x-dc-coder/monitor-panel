@@ -70,6 +70,8 @@ export function renderLab(): string {
   // GPU 指标卡（语义区分：显存=占比，GPU=百分比，温度=量程+阈值分级）
   const vram = lab.vram_used_mib, vramTot = lab.vram_total_mib;
   const util = lab.gpu_util_percent, temp = lab.gpu_temp_c;
+  const cpu = lab.cpu_percent, memP = lab.mem_percent;
+  const memU = lab.mem_used_mib, memT = lab.mem_total_mib;
   const vramPct = vram != null && vramTot ? Math.round((vram / vramTot) * 100) : null;
   const gauges =
     '<div class="lab-gauges">' +
@@ -84,6 +86,12 @@ export function renderLab(): string {
       temp != null ? Math.round(temp) : null,
       tempCls(temp),
       false) +   // 温度不显示百分比标注（40°C 非"占用 40%"）
+    gauge("CPU",
+      cpu != null ? cpu + "%" : "—",
+      cpu != null ? Math.round(cpu) : null) +
+    gauge("内存",
+      memU != null && memT ? memU + " <small>/ " + memT + " MiB</small>" : "—",
+      memP != null ? Math.round(memP) : null) +
     "</div>";
 
   // 当前实验详情

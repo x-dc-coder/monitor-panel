@@ -73,6 +73,10 @@ export interface LabSummary {
   vram_total_mib: number | null;
   vram_util_percent: number | null;
   gpu_temp_c: number | null;
+  cpu_percent: number | null;
+  mem_percent: number | null;
+  mem_used_mib: number | null;
+  mem_total_mib: number | null;
   experiment_active: number | null;
   experiments_total: number | null;
   alerts_crit: number | null;

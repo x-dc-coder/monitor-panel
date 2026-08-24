@@ -95,6 +95,10 @@ GROUP_METRICS: dict[str, tuple[str, ...]] = {
         "vram_total_mib",      # 显存总量 MiB
         "vram_util_percent",   # 显存占用 %
         "gpu_temp_c",          # 温度 °C
+        "cpu_percent",         # 整机 CPU 利用率 %
+        "mem_percent",         # 整机内存占用 %
+        "mem_used_mib",        # 整机内存已用 MiB
+        "mem_total_mib",       # 整机内存总量 MiB
         "experiment_active",   # 当前活跃实验数
         "experiments_total",   # 累计归档实验数
         "alerts_crit",         # 未解决 critical 告警数

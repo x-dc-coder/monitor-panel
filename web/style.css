@@ -209,7 +209,7 @@ select.tbtn option{background:var(--bg2);color:var(--fg)}
 /* ================= 实验视图（lab，issue #11） ================= */
 .lab-status{display:flex;align-items:center;gap:4px;flex-wrap:wrap;font-size:12px;padding:2px 0 12px}
 .lab-status .muted{color:var(--faint)}
-.lab-gauges{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px}
+.lab-gauges{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:16px}
 @media(max-width:1080px){.lab-gauges{grid-template-columns:1fr}}
 .lgauge{background:var(--bg2);border:1px solid var(--line);padding:13px 15px}
 .lgauge .lt{color:var(--faint);font-size:10px;letter-spacing:.12em}
