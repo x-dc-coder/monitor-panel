@@ -12,7 +12,9 @@ WorkingDirectory=/opt/monitor-panel/current
 # .env 在 current 之外的固定路径（/opt/monitor-panel/env），避免 release 切换时丢失；
 # 敏感项 env 注入 + 文件 600
 EnvironmentFile=-/opt/monitor-panel/env
-ExecStart=/opt/monitor-panel/current/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8898
+# --no-access-log（2026-08-24 审查）：access log 每请求一行写入 journal
+# （前端 5s 轮询 + 自探测流量放大，8 天 528MB）；审计需求由 nginx access log 覆盖
+ExecStart=/opt/monitor-panel/current/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8898 --no-access-log
 Restart=on-failure
 RestartSec=5
 # 防重启风暴（评审 C4/E15）

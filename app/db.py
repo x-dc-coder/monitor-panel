@@ -404,6 +404,18 @@ def get_services(node_id: str | None = None,
     return [dict(r) for r in rows]
 
 
+def delete_services(ids: list[int]) -> int:
+    """按主键删服务行（prune 用；调用方负责同步 resolve 告警）。"""
+    if not ids:
+        return 0
+    conn = _cursor()
+    with _lock:
+        marks = ",".join("?" * len(ids))
+        cur = conn.execute(f"DELETE FROM services WHERE id IN ({marks})", ids)
+        conn.commit()
+    return cur.rowcount
+
+
 # ---------------- grm（Release 监控快照：issue #4） ----------------
 _GRM_DEFAULTS = {
     "url": None, "owner_slug": None, "display_name": None, "tags": "[]",
@@ -470,24 +482,39 @@ def get_grm_repos(node_id: str | None = None) -> list[dict]:
 # ---------------- alerts ----------------
 def insert_alert(level: str, source: str, message: str,
                  cooldown_s: float | None = None) -> bool:
-    """带冷却插入：同一 (source, message) 在冷却窗口内不重复告警（8899 模式复用）。
+    """带冷却插入 + 未解决去重（2026-08-24 审查修复）。
 
-    返回 True=已插入，False=冷却中跳过。
+    语义（两层）：
+    1. 该 source 已有**未解决**告警 → 只刷新其 ts（持续故障保持单条 active 行，
+       不再随冷却到期线性堆积——曾致 7 天 310 条同源未解决告警淹没真实告警）
+    2. 无未解决行但冷却窗口内有同 (source, message) 的已解决记录 → 冷却跳过
+       （恢复→再故障场景仍受冷却抑制）
+
+    返回 True=新插入，False=去重/冷却跳过。
     """
     if level not in constants.ALERT_LEVELS:
         level = constants.LEVEL_WARN
     cooldown_s = cooldown_s if cooldown_s is not None else config.ALERT_COOLDOWN_S
     conn = _cursor()
     with _lock:
+        now = time.time()
+        active = conn.execute(
+            "SELECT id FROM alerts WHERE source=? AND resolved=0 "
+            "ORDER BY ts DESC LIMIT 1", (source,)).fetchone()
+        if active:
+            conn.execute("UPDATE alerts SET ts=?, message=? WHERE id=?",
+                         (now, message, active["id"]))
+            conn.commit()
+            return False
         row = conn.execute(
-            "SELECT id FROM alerts WHERE source=? AND message=? AND resolved=0 "
+            "SELECT id FROM alerts WHERE source=? AND message=? "
             "AND ts > ? ORDER BY ts DESC LIMIT 1",
-            (source, message, time.time() - cooldown_s)).fetchone()
+            (source, message, now - cooldown_s)).fetchone()
         if row:
             return False
         conn.execute(
             "INSERT INTO alerts(ts, level, source, message, resolved) VALUES (?, ?, ?, ?, 0)",
-            (time.time(), level, source, message))
+            (now, level, source, message))
         conn.commit()
     return True
 
@@ -518,6 +545,21 @@ def count_unresolved_alerts() -> int:
     with _lock:
         row = conn.execute("SELECT COUNT(*) AS n FROM alerts WHERE resolved=0").fetchone()
     return int(row["n"])
+
+
+def dedup_unresolved_alerts() -> int:
+    """同 source 未解决告警压缩为最新一条（2026-08-24 审查：历史堆积治理）。
+
+    insert_alert 去重只防新增不清理存量（曾 7 天堆出同源 310 条）；
+    服务启动时调用一次，幂等。
+    """
+    conn = _cursor()
+    with _lock:
+        cur = conn.execute(
+            "UPDATE alerts SET resolved=1 WHERE resolved=0 AND id NOT IN "
+            "(SELECT MAX(id) FROM alerts WHERE resolved=0 GROUP BY source)")
+        conn.commit()
+    return cur.rowcount
 
 
 # ---------------- 清理 ----------------

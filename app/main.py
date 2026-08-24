@@ -40,6 +40,10 @@ async def lifespan(app: FastAPI):
     log.info("env files loaded: %s", config.ENV_FILES_LOADED or "(none)")
 
     db.init_db()
+    # 历史未解决告警按 source 压缩为最新一条（insert_alert 去重只防新增不清存量）
+    deduped = db.dedup_unresolved_alerts()
+    if deduped:
+        log.info("alerts: deduped %d stacked unresolved row(s)", deduped)
     registry = build_registry()
     agg = Aggregator()
     api_mod.set_aggregator(agg)

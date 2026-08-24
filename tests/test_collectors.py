@@ -54,7 +54,8 @@ def test_tailscale_mock_devices_and_pings(registry):
 def test_network_mock_probes(registry):
     r = _run(registry["network"].run_once())
     names = {p["name"] for p in r.payload["probes"]}
-    assert "ali-dns" in names and "cloud2-443" in names
+    assert "ali-dns" in names and "dns-resolve" in names
+    assert "cloud2-443" not in names   # 2026-08-24 审查：占位探测对已移除
     assert all(p["reachable"] for p in r.payload["probes"])
 
 

@@ -5,7 +5,9 @@ After=network.target
 [Service]
 Type=oneshot
 # N3: 以 monitor 用户运行，与 db 属主一致（backups/ 可写、db 可读）
+# 2026-08-24 修复：服务器无 sqlite3 CLI（曾每日 exit 127），改用 python3 标准库
+# sqlite3.Connection.backup()（等价 WAL 安全的 .backup，系统自带零依赖）
 User=monitor
 Group=monitor
 WorkingDirectory=/opt/monitor-panel
-ExecStart=/usr/bin/bash -c 'mkdir -p /opt/monitor-panel/backups && /usr/bin/sqlite3 /opt/monitor-panel/data/monitor.db ".backup /opt/monitor-panel/backups/monitor-$(date +%%F).db" && /usr/bin/find /opt/monitor-panel/backups -maxdepth 1 -name "monitor-*.db" -mtime +14 -delete'
+ExecStart=/usr/bin/bash /opt/monitor-panel/backup-db.sh

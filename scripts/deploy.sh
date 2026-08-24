@@ -93,6 +93,12 @@ ssh "$HOST" "sudo -n mkdir -p '$REMOTE_DIR/data' && sudo -n monitor-deploy-ctl c
 
 if switch_and_restart "$RELEASE"; then
   echo "=== 部署成功: $TS ==="
+  echo "→ 清理旧 release（保留最近 5 个；审查修复：曾 27 个/1.7G 只增不减）"
+  # 旧 release 属主 monitor（部署期 chown），ubuntu 删除前先经受控入口归还属主
+  ssh "$HOST" "cd '$REMOTE_DIR/releases' && cur_real=\$(readlink -f '$CURRENT') && \
+    ls -1d */ 2>/dev/null | sort -r | tail -n +6 | while read -r r; do \
+      p=\$(cd \"\$r\" && pwd); [ \"\$p\" = \"\$cur_real\" ] && continue; \
+      sudo -n monitor-deploy-ctl chown ubuntu:ubuntu \"\$p\" && rm -rf \"\$r\" && echo \"  purged \$r\"; done; true"
   echo "  公网验证: curl -fsS -u <user> https://monitor.dc-sy.cn/api/healthz"
   echo "  回滚:     $0 --rollback --host $HOST --remote-dir $REMOTE_DIR"
 else

@@ -209,11 +209,74 @@ class Aggregator:
             else:
                 db.resolve_alerts(src)
 
-    # ---------------- services（服务台账：payload → services 表 + 下线告警） ----------------
+    # ---------------- services（服务台账：payload → services 表 + 下线告警 + 行生命周期） ----------------
+    @staticmethod
+    def _extra_ports_by_ip() -> dict[str, set[int]]:
+        """extra 配置展开：探测 IP → 端口集合（含 "*" 键并入所有 IP，local 键映射 127.0.0.1）。"""
+        out: dict[str, set[int]] = {}
+        star: set[int] = set()
+        for key, val in (config.SERVICES_EXTRA_PORTS or {}).items():
+            ports: set[int] = set()
+            if isinstance(val, list):
+                ports = {int(p) for p in val}
+            elif isinstance(val, dict):
+                ports = {int(p) for p in val}
+            if key == "*":
+                star |= ports
+            else:
+                ip = "127.0.0.1" if key == "local" else key
+                out.setdefault(ip, set()).update(ports)
+        if star:
+            for ips in out.values():
+                ips |= star
+            out.setdefault("*", star)
+        return out
+
+    def _prune_services(self, ts: float) -> int:
+        """行生命周期（2026-08-24 审查：治理 1199 条未解决误报的根源）。
+
+        删除条件（仅 source=auto；manual 人工登记永不删）：
+        1. 端口既不在约定区、也不在该设备 extra 配置里 → 历史登记残留
+           （extra 已移除的端口行曾"已登记必探"永生 → 永久 closed 周期告警）
+        2. 约定区内 closed 且距最后在线（last_seen_ts）> SERVICES_PRUNE_CLOSED_S
+           → 手机 ephemeral / 真下线服务；不用 updated_ts（closed 行每轮
+           探测都会刷新它，会让 prune 永不触发）
+        删除行时同步 resolve 对应告警（历史误报一并清理）。
+        """
+        lo, hi = config.SERVICES_PORT_RANGE
+        extra = self._extra_ports_by_ip()
+        star = extra.get("*", set())
+        doomed: dict[int, str] = {}   # row id → alert source
+        for row in db.get_services():
+            if row.get("source") == "manual":
+                continue
+            port = row.get("port")
+            if port is None:
+                continue
+            ip = row.get("tailscale_ip") or ""
+            in_extra = port in extra.get(ip, set()) or port in star
+            stale_extra = not (lo <= port <= hi) and not in_extra
+            last_seen = row.get("last_seen_ts") or row.get("updated_ts")
+            stale_closed = (lo <= port <= hi and row.get("status") == "closed"
+                            and last_seen
+                            and ts - last_seen > config.SERVICES_PRUNE_CLOSED_S)
+            if stale_extra or stale_closed:
+                doomed[row["id"]] = f"service:{ip}:{port}"
+        if not doomed:
+            return 0
+        for src in doomed.values():
+            db.resolve_alerts(src)
+        n = db.delete_services(list(doomed))
+        if n:
+            log.info("services: pruned %d stale row(s)", n)
+        return n
+
     def _on_services(self, result: CollectorResult, ts: float) -> None:
         rows = (result.payload or {}).get("services") or []
         if rows:
             db.upsert_services(result.node_id, rows)
+        # 设备在线状态（离线设备的服务"下线"多因休眠——抑制告警，tailscale ping 先例）
+        offline = {d["device_id"] for d in db.get_devices() if not d.get("online")}
         for row in rows:
             ip = row.get("tailscale_ip") or ""
             port = row.get("port")
@@ -222,10 +285,16 @@ class Aggregator:
             src = f"service:{ip}:{port}"
             name = row.get("name") or row.get("auto_name") or f"{ip}:{port}"
             if row.get("status") == "closed":
+                if row.get("device_id") in offline:
+                    continue                      # 设备离线（休眠）→ 不告警
+                first = row.get("first_seen_ts")
+                if first and ts - first < config.SERVICES_ALERT_MIN_AGE_S:
+                    continue                      # 存活 <10min 的临时端口 → 不告警
                 # 连续 N 轮未开放才置 closed（采集器已防抖），此处补主动告警
                 self._alert(constants.LEVEL_WARN, src, f"服务 {name}（{ip}:{port}）下线")
             elif row.get("status") == "open":
                 db.resolve_alerts(src)
+        self._prune_services(ts)
 
     # ---------------- grm（Release 监控：payload → grm_repos 表，只读聚合） ----------------
     def _on_grm(self, result: CollectorResult, ts: float) -> None:

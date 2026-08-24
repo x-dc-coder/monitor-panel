@@ -105,7 +105,7 @@ else:
     MOCK, SNAPSHOT = True, False
 SNAPSHOT_DIR = BASE_DIR / "snapshots"             # 静态真实数据快照（本机测试用）
 DEBUG = _env_bool("MONITOR_DEBUG", False)
-VERSION = "0.1.0"
+VERSION = "1.3.0"
 
 # ================= 监控节点（多云预留） =================
 NODE_ID = _env("MONITOR_NODE_ID", "cloud-1")
@@ -137,13 +137,13 @@ CERT_DOMAINS = _env_json("MONITOR_CERT_DOMAINS",
                          ["dc-sy.cn", "headscale.dc-sy.cn", "monitor.dc-sy.cn"])
 LETSENCRYPT_LIVE = Path(_env("MONITOR_LETSENCRYPT_LIVE", "/etc/letsencrypt/live"))
 
-# 探测对（F4 多云兜底雏形；cloud-2 接入后补对等探测）
+# 探测对（F4 多云兜底雏形；cloud-2 接入后再补对等探测——2026-08-24 审查移除
+# 占位对 cloud2-443→2.2.2.2：每轮必超时拖慢 network 采集 ~8s 且前端恒显 1 fail）
 DEFAULT_PROBES = [
     {"name": "ali-dns", "kind": "icmp", "target": "223.5.5.5"},
     {"name": "cloudflare-dns", "kind": "icmp", "target": "1.1.1.1"},
     {"name": "public-https", "kind": "http", "target": "https://example.com"},
     {"name": "dns-resolve", "kind": "dns", "target": "example.com"},
-    {"name": "cloud2-443", "kind": "tcp", "target": "2.2.2.2", "port": 443},
 ]
 PROBES = _env_json("MONITOR_PROBES", DEFAULT_PROBES)
 
@@ -178,6 +178,12 @@ SERVICES_CONNECT_TIMEOUT = _env_float("MONITOR_SERVICES_CONNECT_TIMEOUT", 1.5)
 SERVICES_HTTP_TIMEOUT = _env_float("MONITOR_SERVICES_HTTP_TIMEOUT", 2.0)
 SERVICES_CONCURRENCY = _env_int("MONITOR_SERVICES_CONCURRENCY", 64)
 SERVICES_MISSING_ROUNDS = _env_int("MONITOR_SERVICES_MISSING_ROUNDS", 3)  # 连续 N 轮未开放 → closed
+# ---- 行生命周期与告警降噪（2026-08-24 审查：周报 1199 条未解决误报治理） ----
+# closed 状态持续超过该秒数的 auto 行被 prune（表里删除 + 告警 resolve）：
+# 消灭"历史登记残留"（extra 已移除的端口）与手机 ephemeral 端口的永久误报
+SERVICES_PRUNE_CLOSED_S = _env_int("MONITOR_SERVICES_PRUNE_CLOSED_S", 3600)
+# 服务自首次发现起不足该秒数即下线 → 不告警（新发现的临时端口防误报）
+SERVICES_ALERT_MIN_AGE_S = _env_int("MONITOR_SERVICES_ALERT_MIN_AGE_S", 600)
 
 # ================= 采集周期（秒） =================
 INTERVALS = {
