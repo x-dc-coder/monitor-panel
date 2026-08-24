@@ -27,3 +27,7 @@ deploy/.snapshots/
 .DS_Store
 .pytest_cache/
 .openapi.json
+
+# pnpm 意外生成（本仓库用 esbuild 直用，无需 pnpm 管理）
+pnpm-lock.yaml
+pnpm-workspace.yaml
