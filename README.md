@@ -1,9 +1,9 @@
 # monitor.dc-sy.cn 统一监控面板 — 开发计划与任务书
 
-> 版本：v1.3 ｜ 更新：2026-08-22 ｜ 状态：**M1–M5 完成 + issue 清零，线上运行中（release 20260822-195935）**
-> 本文档是开发工作区的主指引；详细设计见 docs/ 下六份团队报告。
+> 版本：v1.3.1 ｜ 更新：2026-08-24 ｜ 状态：**M1–M5 完成 + issue 清零 + 一周运行审查修复，线上运行中（release 20260824-083139 / VERSION 1.3.0）**
+> 本文档是开发工作区的主指引；详细设计见 docs/ 下八份报告。
 
-## 开发状态（2026-08-22 更新）
+## 开发状态（2026-08-24 更新）
 
 | 里程碑 | 状态 | 说明 |
 |---|---|---|
@@ -13,13 +13,19 @@
 | M4 部署上线 | ✅ 完成 | 2026-08-17 上线（scripts/deploy.sh 原子部署：备份→releases→软链→健康检查→自动回滚） |
 | M5 加固扩展 | ✅ 完成 | Basic Auth、配置统一（fail-fast + mode 健康检查）、Release 监控聚合、移动端适配、ingest 认证就绪（cloud-2 接入即开）、openapi 类型管线 |
 
+**一周运行审查修复（2026-08-24，v1.3.0，commit d176590）**：
+- **P0 备份失效**：服务器无 sqlite3 CLI，每日备份自上线起 exit 127（零备份）——改 `deploy/backup-db.sh`（python 标准库 WAL 安全 backup），已实测产出
+- **P1 告警误报治理**：1199 条未解决（几乎全误报）→ 2 条真实。根因 = services 行无生命周期 + 冷却到期重插；修复 = 行 prune（判据 last_seen_ts）/ 同 source 单条 active / 启动压缩历史堆积 / 设备离线（休眠）抑制 / 首见 10min 内临时端口不告
+- **P2 运行卫生**：deploy.sh 部署后清理旧 release 保留 5 个（1.8G→401M）；移除 cloud2-443 占位探测；uvicorn `--no-access-log` + journald 限 200M（528M→232M）；unit venv 对齐回 `current/.venv`（固定 venv 遗留曾致依赖升级静默不生效）
+- 测试 63 → 65 passed（新增 7 治理用例）；线上 collectors 0 errors、network 4/4
+
 **issue 清零批次（2026-08-22，全 5 个 open issue 落地）**：
-- **#1 配置统一**：env 单一权威源 `/opt/monitor-panel/env`（systemd 与 config.py 双通道同源，release 零拷贝）；`validate_config()` live 凭据缺失拒启；deploy.sh 健康检查校验 `mode ∈ {live,snapshot}`（回落 mock = 部署失败自动回滚）；backup-db/fetch_snapshot 散落点收敛；.env.example 覆盖全部 63 变量
+- **#1 配置统一**：env 单一权威源 `/opt/monitor-panel/env`（systemd 与 config.py 双通道同源，release 零拷贝）；`validate_config()` live 凭据缺失拒启；deploy.sh 健康检查校验 `mode ∈ {live,snapshot}`（回落 mock = 部署失败自动回滚）；backup-db/fetch_snapshot 散落点收敛；.env.example 覆盖全部变量（68 个）
 - **#4 Release 监控区块**：`collectors/grm.py` 只读聚合同机 repositories.json（5min），grm_repos 快照表 + prune；前端卡片视图（NEW/prerelease/置顶/tags，无 release 降级占位待 fork 扩展字段）+ overview 摘要行；grm 不可读仅本区块降级
 - **#5 ingest 认证**：nginx `location = /api/ingest auth_basic off`（limit_except POST）+ 应用层 `hmac.compare_digest` Bearer token；INGEST_ENABLED 保持 false，cloud-2 接入时 env 置 1 即用
 - **#6 openapi → TS**：`app/api/schemas.py` + `npm run gen:types` → `web/src/types.gen.ts`（提交），services/grm 高频类型 re-export 生成类型（后端加字段漏改 → tsc 编译期报错）；CI 加类型漂移检查
 - **#3 移动端响应式**：768/640/400px 三档媒体查询（侧栏图标栏、DataTable 次要列 sec 隐藏、表格容器横滚、KPI/网格降列）；桌面零回归
-- 线上验证：pytest 57 ✓ / npm 6 ✓ / 10 视图 0 console error ✓ / 390px+768px 0 横向溢出 ✓ / Playwright 截图核验 ✓
+- 线上验证：当时 pytest 57 / npm 6（现 65，见上方审查批次）✓ / 10 视图 0 console error ✓ / 390px+768px 0 横向溢出 ✓ / Playwright 截图核验 ✓
 
 **二期增强（2026-08-17）**：
 - 服务台账（issue #2）：约定区自动发现 + 探活 + 域名探测 + 直达分级 + 下线告警（docs/05）
@@ -51,10 +57,11 @@ PANEL_USER=<basic-auth 用户名> PANEL_PASS=<密码> npm run verify:e2e
 **M4 部署入口**（已上线，日常更新同命令）：
 
 ```bash
-./scripts/deploy.sh --host dc-sy --remote-dir /opt/monitor-panel   # 原子部署
+./scripts/deploy.sh --host dc-sy --remote-dir /opt/monitor-panel   # 原子部署（含旧 release 清理）
 ssh dc-sy "sudo install -m 440 deploy/sudoers.monitor /etc/sudoers.d/monitor-panel"
-ssh dc-sy "sudo install -m 644 deploy/logrotate.conf /etc/logrotate.d/monitor-panel"
-ssh dc-sy "sudo cp deploy/backup-db.{service,timer} /etc/systemd/system/ && sudo systemctl enable --now backup-db.timer"
+# 日志走 journald（限额 SystemMaxUse=200M），无文件日志 → logrotate.conf 不安装
+ssh dc-sy "sudo cp deploy/backup-db.{service,timer} /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now backup-db.timer"
+ssh dc-sy "sudo cp deploy/backup-db.sh /opt/monitor-panel/backup-db.sh && sudo monitor-deploy-ctl chmod 755 /opt/monitor-panel/backup-db.sh && sudo monitor-deploy-ctl chown monitor:monitor /opt/monitor-panel/backups"
 ./scripts/setup_nginx_cert.sh --issuance dns   # 或 http（预检 8a 判定）
 ```
 
@@ -88,39 +95,53 @@ monitor-panel/
 │   │   ├── system.py      # psutil：CPU/内存/磁盘/负载/网络吞吐
 │   │   ├── network.py     # 探测对执行：ICMP/TCP/HTTP/DNS（asyncio 并发）
 │   │   ├── services.py    # 服务台账：约定区扫描 + 协议识别 + 探活（issue #2）
+│   │   ├── grm.py         # Release 监控：只读聚合 github-release-monitor 数据文件（issue #4）
 │   │   └── certs.py       # letsencrypt 证书到期扫描
 │   ├── services/
-│   │   ├── aggregator.py  # 最新快照缓存 + 派生指标 + 阈值判定
+│   │   ├── aggregator.py  # 最新快照缓存 + 派生指标 + 阈值判定 + services 行生命周期/prune
 │   │   └── history.py     # 趋势查询：range + bucket 降采样
-│   └── api/               # 只读 API（除预留 /api/ingest）
+│   └── api/               # 只读 API（除 /api/ingest）
 │       ├── overview.py    # GET /api/overview
 │       ├── devices.py     # GET /api/devices, POST /api/devices/{id}/ping
 │       ├── frp.py         # GET /api/frp
+│       ├── grm.py         # GET /api/grm（Release 监控，issue #4）
 │       ├── history.py     # GET /api/history
 │       ├── system.py      # GET /api/system, /api/certs, /api/network
 │       ├── services.py    # GET /api/services（服务台账）
-│       └── ingest.py      # POST /api/ingest（远端 agent 上报预留，本期默认 404）
+│       ├── schemas.py     # openapi schema 模型（issue #6：gen:types 管线数据源）
+│       └── ingest.py      # POST /api/ingest（cloud-2 上报；nginx 已豁免 Basic Auth，
+│       │                  #   应用层 Bearer token；INGEST_ENABLED=0 时 404，docs/08）
 ├── web/
 │   ├── index.html         # 单页面板（顶部状态条 + 卡片 + 表格 + 趋势图区）
 │   ├── src/               # TypeScript 源码（esbuild 打包 → dist/app.js）
 │   │   ├── main.ts        # 入口：hash 路由 + 轮询调度 + 视图装配
-│   │   ├── table.ts       # 通用 DataTable：分页/筛选/聚合（docs/06）
+│   │   ├── table.ts       # 通用 DataTable：分页/筛选/聚合/次要列 sec（docs/06）
 │   │   ├── ui.ts          # 组件库：win/tb/st/statusLevel/esc
 │   │   ├── state.ts       # 轮询结果缓存（视图读取，切换视图立即刷新）
 │   │   ├── api.ts / fmt.ts / ascii.ts / types.ts
-│   │   └── views/         # 视图：overview/devices/tunnels/services/alerts/…
+│   │   ├── types.gen.ts   # openapi 生成的 TS 类型（npm run gen:types，提交入库，issue #6）
+│   │   └── views/         # 视图：overview/devices/tunnels/services/releases/alerts/…
 │   ├── dist/app.js        # 构建产物（minify）
 │   └── style.css
 ├── scripts/
-│   ├── deploy.sh          # rsync → 备份 → 符号链接切换 → 健康检查 → 回滚
-│   └── setup_nginx_cert.sh# nginx block + 证书双通道（--issuance http|dns）
-├── tests/                 # mock 数据源下的采集器/API 冒烟测试（pytest 42 项）
+│   ├── deploy.sh          # rsync → 备份 → 符号链接切换 → 健康检查(mode) → 回滚 → 旧 release 清理(保留 5)
+│   ├── setup_nginx_cert.sh# nginx block + 证书双通道（--issuance http|dns；含 /api/ingest 豁免块）
+│   ├── fetch_snapshot.sh + fetch_snapshot_remote.py  # cloud 真实数据快照抓取（snapshot 模式）
+│   ├── export_openapi.py + gen_types.js              # issue #6 类型生成管线
+│   └── verify-panel.cjs   # Playwright e2e 回归（npm run verify:e2e）
+├── deploy/                # 服务器侧部署资产
+│   ├── sudoers.monitor    # monitor 用户 sudo 白名单
+│   ├── logrotate.conf     # （无文件日志，实际未安装；日志走 journald 限额）
+│   ├── backup-db.service + backup-db.timer + backup-db.sh  # 每日 db 备份（python 标准库）
+├── snapshots/             # MONITOR_MOCK=snapshot 模式的静态快照（含 grm.json）
+├── monitor-panel.service  # systemd unit（current/.venv + --no-access-log）
+├── tests/                 # mock 数据源下的采集器/API/治理测试（pytest 65 项）
 │   └── table.test.ts      # DataTable 纯逻辑单测（node --test 6 项）
-├── .github/workflows/ci.yml  # CI：pytest + tsc + npm test + build
+├── .github/workflows/ci.yml  # CI：pytest + tsc + types.gen 漂移检查 + npm test + build
 ├── requirements.txt       # fastapi uvicorn httpx psutil
 ├── monitor-panel.service  # systemd 模板（127.0.0.1:8898）
 ├── README.md
-└── docs/                  # 本目录（方案/调研/评审/手册/约定 六份报告）
+└── docs/                  # 本目录（方案/调研/评审/手册/约定/runbook 八份报告）
 ```
 
 ## 2. 开发顺序（里程碑）
@@ -133,11 +154,11 @@ monitor-panel/
 | **M4 部署上线** | git → cloud 原子部署 → systemd → nginx → certbot → 健康检查 | monitor.dc-sy.cn 公网可访问；上线 checklist 全过（见 §5） |
 | **M5 加固扩展** | Basic Auth、告警 webhook、cloud-2 节点接入 | 安全加固完成；第二台云接入流程可执行 |
 
-**当前起点：M1。**
+**当前状态：M1–M5 全部完成并上线（见顶部开发状态）；本表为历史任务书保留。**
 
 ## 3. 核心设计要点（开发时必读）
 
-### 3.1 数据模型（6 张表，均带 node_id 支持多云）
+### 3.1 数据模型（7 张表，均带 node_id 支持多云）
 
 ```sql
 monitor_nodes(id, name, role, public_ip, enabled, last_seen_ts)   -- 'cloud-1','cloud-2'
@@ -151,10 +172,16 @@ services(id, node_id, device_id, device_name, tailscale_ip, port, -- 服务台�
          name, auto_name, protocol, url, http_status, latency_ms,
          status, missing_rounds, source, enabled,
          first_seen_ts, last_seen_ts, updated_ts)                 -- 端口约定驱动自动发现
+grm_repos(id, node_id, repo_id, url, owner_slug, display_name,   -- Release 监控快照（issue #4）
+          tags, is_pinned, is_new, latest_tag/name/url,
+          latest_prerelease, published_ts, readme_summary,
+          recent_commits, first_seen_ts, updated_ts)              -- grm 侧清单唯一权威（prune 联动）
 ```
 
 > 服务台账机制：自定义项目/网站统一绑定约定区（默认 10000–19999），面板自动扫描
-> 发现 + 探活；区间外固定端口走 manual 登记。详见 `docs/05-服务台账与端口约定.md`。
+> 发现 + 探活；区间外固定端口走 manual 登记。**行生命周期（2026-08-24）**：auto 行
+> closed 距 last_seen 超 `SERVICES_PRUNE_CLOSED_S`（默认 1h）或脱离 extra 配置即
+> 删除并 resolve 告警；manual 行永不删。详见 `docs/05-服务台账与端口约定.md`。
 
 ### 3.2 API（统一 `{ok, data, ts}`；公网经 nginx Basic Auth 保护）
 
@@ -166,12 +193,15 @@ services(id, node_id, device_id, device_name, tailscale_ip, port, -- 服务台�
 | GET /api/frp | frps 隧道列表+流量 |
 | GET /api/system /api/certs /api/network | 资源/证书/探测 |
 | GET /api/services | 服务台账（自动发现 + 探活状态 + 直达链接 + 下线告警） |
+| GET /api/grm | Release 监控（grm 只读聚合：仓库卡片 + summary，issue #4） |
 | GET /api/history?metric=&range=&bucket= | 趋势降采样 |
-| GET /api/healthz | 探活（本机直连 127.0.0.1，nginx 认证不涉及） |
-| POST /api/ingest | 预留（本期 404） |
+| GET /api/healthz | 探活 + mode + 采集器统计（本机直连 127.0.0.1，nginx 认证不涉及） |
+| POST /api/ingest | cloud-2 agent 上报（nginx 已豁免 Basic Auth；应用层 Bearer token；
+  `INGEST_ENABLED=0` 时 404 不可发现，接入步骤见 docs/08） |
 
 > 公网访问 `https://monitor.dc-sy.cn` 需 Basic Auth（凭据文件 /etc/nginx/.htpasswd.monitor；
-> ACME 挑战路径已豁免认证）。本机 127.0.0.1:8898 直连无认证（部署健康检查走此通道）。
+> ACME 挑战与 `/api/ingest` 已豁免认证——后者防护在应用层 token）。本机 127.0.0.1:8898
+> 直连无认证（部署健康检查走此通道）。
 
 ### 3.3 采集要点（评审确认的硬要求）
 
@@ -225,7 +255,9 @@ env 文件加载顺序（`app/config.py`，`setdefault` 语义——已存在的
       `location ^~ /.well-known/acme-challenge/ { auth_basic off; }`（Basic Auth 豁免 ACME）
 - [ ] 证书：预检 8a（外部 curl -sI 探测 webblock）→ HTTP-01 优先 / DNS-01 兜底（acme.sh dns_ali，阿里云 RAM AK 仅 DNS 权限，凭据 600 不入 git）
 - [ ] systemd：monitor-panel.service（monitor 用户，127.0.0.1:8898，Restart=on-failure）
-- [ ] 日志轮转 + 每日 db 备份 timer（backup-db.timer 身份/权限核对）
+- [ ] 每日 db 备份 timer（backup-db.timer + backup-db.sh，python 标准库方案；
+      backups/ 目录属主 monitor；sqlite3 CLI 不存在勿用）。日志走 journald
+      （SystemMaxUse=200M 限额），无文件日志 → logrotate 不安装
 - [ ] nginx/letsencrypt 配置快照（部署前 tar）
 - [ ] /api/healthz 200（本机 127.0.0.1 验证，避免 Basic Auth 干扰）
 - [ ] 页面截图核验（总览卡片/设备表/隧道表/趋势图/状态灯）

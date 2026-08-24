@@ -2,7 +2,8 @@
 # ============================================================
 # monitor-panel 原子部署脚本（M4）
 #   本地 → rsync 到 releases/<ts> → 备份 → 符号链接切换 →
-#   systemctl restart → 健康检查 → 失败自动回滚
+#   systemctl restart → 健康检查（ok + mode 非 mock）→ 失败自动回滚 →
+#   旧 release 清理（保留最近 5 个，current 指向除外）
 # 用法:
 #   ./scripts/deploy.sh                      # 部署当前代码
 #   ./scripts/deploy.sh --rollback           # 回滚到上一 release
