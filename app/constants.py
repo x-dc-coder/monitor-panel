@@ -89,7 +89,8 @@ GROUP_METRICS: dict[str, tuple[str, ...]] = {
         "repos_new",           # 带"新发布"标记的仓库数
     ),
     GROUP_LAB: (
-        "gpu_util_percent",    # GPU 利用率 %
+        "gpu_util_percent",    # GPU 利用率 %（30s 窗口均值，#13-2）
+        "gpu_util_max",        # GPU 利用率 %（30s 窗口峰值，#13-2）
         "vram_used_mib",       # 显存已用 MiB
         "vram_total_mib",      # 显存总量 MiB
         "vram_util_percent",   # 显存占用 %
