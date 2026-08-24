@@ -388,6 +388,8 @@ class Aggregator:
                 "alerts_warn": lab_p.get("alerts_warn"),
                 "monitor_enabled": lab_p.get("monitor_enabled"),
                 "experiment": lab_p.get("experiment"),
+                "procs_top": lab_p.get("procs_top") or [],
+                "tags": lab_p.get("tags") or [],
             },
             "alerts": {"unresolved": db.count_unresolved_alerts()},
             "nodes": [

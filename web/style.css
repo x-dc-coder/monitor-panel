@@ -236,6 +236,18 @@ select.tbtn option{background:var(--bg2);color:var(--fg)}
 @media(max-width:1080px){.lab-trend-grid{grid-template-columns:1fr}}
 .lab-trend-grid .lgauge{background:var(--bg3);border:1px solid var(--line2);padding:10px 12px}
 .lab-trend-grid .lgauge .lt{margin-bottom:6px}
+
+/* #13-1 进程列表 / 标签组 */
+.lab-procs{display:flex;flex-direction:column;gap:3px;max-height:280px;overflow-y:auto}
+.lab-proc{display:flex;align-items:center;gap:10px;font-size:11px;padding:3px 6px;background:var(--bg3);border:1px solid var(--line2)}
+.lab-proc .lp-pid{color:var(--faint);font-variant-numeric:tabular-nums;min-width:48px}
+.lab-proc .lp-cmd{flex:1;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lab-proc .lp-mem,.lab-proc .lp-cpu{color:var(--fg);font-variant-numeric:tabular-nums}
+.lab-tags{display:flex;flex-direction:column;gap:6px}
+.lab-tag{display:flex;align-items:center;gap:10px;font-size:11px;padding:5px 8px;background:var(--bg3);border:1px solid var(--line2)}
+.lab-tag .lt-label{color:var(--cy);font-weight:600}
+.lab-tag .lt-pids,.lab-tag .lt-gpu,.lab-tag .lt-cpu,.lab-tag .lt-mem{color:var(--dim);font-variant-numeric:tabular-nums}
+.lab-tag .badge{background:var(--bg2);border:1px solid var(--line2);color:var(--violet);font-size:9px;padding:0 4px;border-radius:2px}
 .acchart{overflow-x:auto}
 .acchart pre{font-family:var(--mono);font-size:10.5px;line-height:1.25;margin:0;color:var(--dim)}
 .ac-title{color:var(--faint);font-size:10px;margin-bottom:4px;letter-spacing:.05em}

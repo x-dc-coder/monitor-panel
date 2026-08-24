@@ -95,6 +95,30 @@ export function renderLab(): string {
       "<span>已跑 " + fmtDur(exp.startTs) + "</span></div></div>"
     : '<div class="empty">当前无活跃实验（累计 ' + (lab.experiments_total ?? 0) + " 次已完成）</div>";
 
+  // #13-1 进程级快照 + 标签组聚合（转发器 payload，30s 刷新）
+  const procs = lab.procs_top || [];
+  const tags = lab.tags || [];
+  const procsWin = win("Top 进程 · procs", "按内存 Top " + (procs.length || 10) + " · 30s",
+    procs.length
+      ? '<div class="lab-procs">' + procs.map((p) =>
+          '<div class="lab-proc"><span class="lp-pid">' + p.pid + "</span>" +
+          '<span class="lp-cmd" title="' + esc(p.cmd) + '">' + esc(p.cmd) + "</span>" +
+          '<span class="lp-mem num">' + (p.memMiB != null ? p.memMiB + "M" : "—") + "</span>" +
+          (p.cpuPct != null ? '<span class="lp-cpu num">' + p.cpuPct + "%</span>" : "") +
+          "</div>").join("") + "</div>"
+      : '<div class="empty">无进程数据（转发器未上报 procs_top）</div>');
+  const tagsWin = win("标签组 · tags", (tags.length || 0) + " 组 · 30s",
+    tags.length
+      ? '<div class="lab-tags">' + tags.map((t) =>
+          '<div class="lab-tag"><span class="lt-label">' + esc(t.label) +
+          (t.kind === "experiment" ? ' <span class="badge">exp</span>' : "") + "</span>" +
+          '<span class="lt-pids num">' + (t.pids || []).length + " pid</span>" +
+          (t.gpuUtilPct != null ? '<span class="lt-gpu num">GPU ' + t.gpuUtilPct + "%</span>" : "") +
+          (t.cpuPct != null ? '<span class="lt-cpu num">CPU ' + t.cpuPct + "%</span>" : "") +
+          (t.memMiB != null ? '<span class="lt-mem num">' + t.memMiB + "M</span>" : "") +
+          "</div>").join("") + "</div>"
+      : '<div class="empty">无标签组（本机未配置 tags）</div>');
+
   // #13-2 趋势图区块（数据由 bindLab() 异步填充）
   const trend =
     '<div class="lab-trend">' +
@@ -114,7 +138,8 @@ export function renderLab(): string {
     '<div class="muted sm" style="margin-top:10px">实验历史明细与 GPU 趋势见本机 lab-monitor 面板；' +
     "此处为远端汇总（转发器 30s 上报）。</div>";
 
-  return head + statusRow + gauges + win("当前实验", "live", expCard + histHint) + trend;
+  return head + statusRow + gauges + win("当前实验", "live", expCard + histHint) +
+    '<div class="grid2">' + procsWin + tagsWin + "</div>" + trend;
 }
 
 /** 趋势图数据加载（lab 视图渲染后由 bindLab 绑定） */

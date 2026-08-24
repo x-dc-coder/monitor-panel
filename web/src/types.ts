@@ -84,6 +84,21 @@ export interface LabSummary {
     type?: string;
     startTs?: number;
   } | null;
+  procs_top?: {
+    pid: number;
+    ppid: number | null;
+    cmd: string;
+    cpuPct: number | null;
+    memMiB: number | null;
+  }[];
+  tags?: {
+    label: string;
+    kind: string;
+    pids: number[];
+    gpuUtilPct: number | null;
+    cpuPct: number | null;
+    memMiB: number | null;
+  }[];
 }
 export interface NodeInfo {
   id: string;
