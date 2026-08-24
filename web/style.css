@@ -218,6 +218,8 @@ select.tbtn option{background:var(--bg2);color:var(--fg)}
 .lbar{height:6px;background:var(--bg3);border:1px solid var(--line2);margin-top:8px;position:relative}
 .lbar.empty{opacity:.4}
 .lfill{height:100%;background:var(--cy);box-shadow:0 0 6px var(--cyglow);transition:width .5s}
+.lfill.warn{background:var(--warn);box-shadow:0 0 6px rgba(233,180,92,.5)}
+.lfill.crit{background:var(--crit);box-shadow:0 0 6px rgba(231,93,104,.55)}
 .lsub{color:var(--faint);font-size:10px;margin-top:4px}
 .lab-exp-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .lab-exp-head .badge{background:var(--bg3);border:1px solid var(--line2);color:var(--cy);font-size:10px;padding:1px 8px;border-radius:3px}
