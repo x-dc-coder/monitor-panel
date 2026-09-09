@@ -236,6 +236,13 @@ PING_CMD = _env("MONITOR_PING_CMD", "ping")
 INGEST_ENABLED = _env_bool("MONITOR_INGEST_ENABLED", False)
 INGEST_TOKEN = _env("MONITOR_INGEST_TOKEN", "")
 
+# ================= SSO (Casdoor OIDC) =================
+SSO_ENABLED = _env_bool("MONITOR_SSO_ENABLED", True)
+CASDOOR_CLIENT_ID = _env("CASDOOR_CLIENT_ID", "")
+CASDOOR_CLIENT_SECRET = _env("CASDOOR_CLIENT_SECRET", "")
+CASDOOR_ISSUER = _env("CASDOOR_ISSUER", "https://sso.dc-sy.cn").rstrip("/")
+SESSION_SECRET_KEY = _env("MONITOR_SESSION_SECRET", "monitor-panel-session-secret-key-change-me")
+
 # ================= 静态资源 =================
 WEB_DIR = BASE_DIR / "web"
 

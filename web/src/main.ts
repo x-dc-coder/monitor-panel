@@ -155,7 +155,28 @@ document.addEventListener("table-change", () => render());
 
 window.addEventListener("hashchange", render);
 
+async function checkCurrentUser(): Promise<void> {
+  try {
+    const r = await fetch("/api/me");
+    if (r.ok) {
+      const res = (await r.json()) as { ok?: boolean; data?: { name?: string; id?: string } };
+      if (res.ok && res.data) {
+        const u = res.data;
+        const elSeg = document.getElementById("sb-user-seg");
+        const elName = document.getElementById("sb-user-name");
+        if (elSeg && elName) {
+          elName.textContent = u.name || u.id || "用户";
+          elSeg.style.display = "inline-flex";
+        }
+      }
+    }
+  } catch {
+    /* 静默忽略未登录或网络错误 */
+  }
+}
+
 function boot(): void {
+  void checkCurrentUser();
   render();
   void refreshSpark();
   void pollOverview();

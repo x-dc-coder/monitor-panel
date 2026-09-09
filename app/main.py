@@ -11,12 +11,14 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 
 from app import api as api_mod
 from app import config, db
-from app.api import devices, frp, grm, history, ingest, overview, services, system
+from app.api import auth, devices, frp, grm, history, ingest, overview, services, system
 from app.collectors import build_registry
 from app.scheduler import Scheduler
 from app.services.aggregator import Aggregator
@@ -84,6 +86,51 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="monitor-panel", version=config.VERSION, lifespan=lifespan)
+
+
+@app.middleware("http")
+async def auth_guard_middleware(request: Request, call_next):
+    # SSO 未开启或未配置 Client ID 时旁路放行（本地开发与单元测试兼容）
+    if not config.SSO_ENABLED or not config.CASDOOR_CLIENT_ID:
+        return await call_next(request)
+
+    path = request.url.path
+
+    # 白名单端点放行：
+    # 1. 认证路由自身：/auth/*
+    # 2. 健康检查：/api/healthz（deploy.sh 健康检查强依赖）
+    # 3. 监控指标上报：/api/ingest（dc-desktop 等 agent 走独立 Bearer token 校验）
+    # 4. 静态资源（js/css/图片/图标/字体等）
+    if (
+        path.startswith("/auth/")
+        or path == "/api/healthz"
+        or path == "/api/ingest"
+        or path.endswith((".js", ".css", ".png", ".jpg", ".svg", ".ico", ".woff", ".woff2", ".map"))
+    ):
+        return await call_next(request)
+
+    user = request.session.get("user")
+    if not user:
+        if path.startswith("/api/"):
+            return JSONResponse(status_code=401, content={"ok": False, "error": "unauthorized"})
+        return RedirectResponse(url="/auth/login")
+
+    return await call_next(request)
+
+
+# Session 中间件（包裹在最外层，确保 auth_guard_middleware 可以读取 request.session）
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=config.SESSION_SECRET_KEY,
+    session_cookie="monitor_session",
+    max_age=7 * 24 * 3600,
+    same_site="lax",
+    https_only=not config.MOCK,
+)
+
+
+# 挂载认证路由（/auth/login, /auth/callback, /auth/logout, /api/me）
+app.include_router(auth.router)
 
 for router in (overview.router, devices.router, frp.router, grm.router,
                history.router, system.router, services.router, ingest.router):

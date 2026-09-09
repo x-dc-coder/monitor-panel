@@ -16,6 +16,11 @@ export async function api<T>(path: string, opts?: RequestInit): Promise<T> {
   } catch (e) {
     throw new ApiError("网络不可达: " + (e instanceof Error ? e.message : String(e)), 0);
   }
+  if (r.status === 401) {
+    // 未授权或 Session 失效：跳转 SSO 登录
+    window.location.href = "/auth/login";
+    throw new ApiError("未授权，正在跳转登录...", 401);
+  }
   let j: Envelope<T>;
   try {
     j = (await r.json()) as Envelope<T>;
