@@ -92,15 +92,21 @@ async def auth_callback(request: Request):
 
 @router.get("/auth/logout")
 async def logout(request: Request):
-    """单点退出：清空本地 Session 并重定向至 Casdoor 登出页。
+    """单点退出（RP-initiated logout）：清空本地 Session，并让 Casdoor
+    清除其会话后把浏览器跳回本面板登录页（/auth/login → 302 到 Casdoor
+    授权页 = 登录表单）。
 
-    注意：必须跳 Casdoor 的页面端点 /logout（SPA 清 SSO cookie 后按
-    redirect_uri 自动跳回）；若跳 /api/logout 只返回 JSON、不会自动跳转
-    （2026-09-09 实测）。
+    注意：必须用 Casdoor 的 post_logout_redirect_uri 参数（而非
+    redirect_uri），且该地址要注册在应用 Redirect URLs 列表，否则
+    Casdoor 只返回 JSON 不跳转（2026-09-09 官方文档 + 实测）。
     """
     request.session.clear()
-    home_url = "https://monitor.dc-sy.cn/" if "dc-sy.cn" in str(request.base_url) else str(request.base_url)
-    logout_url = f"{config.CASDOOR_ISSUER}/logout?redirect_uri={quote(home_url, safe='')}"
+    if "dc-sy.cn" in str(request.base_url):
+        post_logout_uri = "https://monitor.dc-sy.cn/auth/login"
+    else:
+        post_logout_uri = str(request.base_url).rstrip("/") + "/auth/login"
+    q = quote(post_logout_uri, safe="")
+    logout_url = f"{config.CASDOOR_ISSUER}/api/logout?client_id={config.CASDOOR_CLIENT_ID}&post_logout_redirect_uri={q}"
     return RedirectResponse(url=logout_url)
 
 

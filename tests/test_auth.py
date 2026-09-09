@@ -53,12 +53,13 @@ def test_sso_guard_intercepts_unauthenticated(client, monkeypatch):
 
 
 def test_sso_logout(client, monkeypatch):
-    """登出操作应重定向到 Casdoor 登出页（/logout 页面端点，非 /api/logout JSON）。"""
+    """登出应走 Casdoor RP-initiated logout（/api/logout + post_logout_redirect_uri 自动跳转）。"""
     monkeypatch.setattr(config, "CASDOOR_ISSUER", "https://sso.dc-sy.cn")
+    monkeypatch.setattr(config, "CASDOOR_CLIENT_ID", "test-client-id")
     r = client.get("/auth/logout", follow_redirects=False)
     assert r.status_code in (302, 307)
     loc = r.headers["location"]
-    # 跳 Casdoor 页面端点 /logout（而非 /api/logout JSON）
-    assert loc.startswith("https://sso.dc-sy.cn/logout?redirect_uri=")
-    # redirect_uri 是当前站点首页（testserver 环境回退 base_url）
-    assert "testserver" in loc
+    assert loc.startswith("https://sso.dc-sy.cn/api/logout?client_id=test-client-id")
+    # post_logout_redirect_uri 回当前站点登录页（testserver 环境回退 base_url）
+    assert "post_logout_redirect_uri=" in loc
+    assert "testserver%2Fauth%2Flogin" in loc
