@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- monitor.dc-sy.cn favicon: bg #090d13, cy #5fe3cf -->
+  <rect width="64" height="64" rx="14" fill="#090d13"/>
+  <rect x="1" y="1" width="62" height="62" rx="13" fill="none" stroke="#1c2531" stroke-width="1.5"/>
+  <!-- glow layer -->
+  <path d="M9 36 L19 36 L23 25 L27 13 L33 47 L37 30 L41 34 L55 34" fill="none"
+        stroke="#5fe3cf" stroke-opacity="0.22" stroke-width="9"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- main signal line -->
+  <path d="M9 36 L19 36 L23 25 L27 13 L33 47 L37 30 L41 34 L55 34" fill="none"
+        stroke="#5fe3cf" stroke-width="5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
