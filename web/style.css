@@ -69,6 +69,13 @@ button{font-family:inherit;color:inherit;background:none;border:none;cursor:poin
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 
 /* ================= 视图通用 ================= */
+/* ================= 底部备案栏（布局内常驻，不遮挡内容） ================= */
+.footbar{flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:8px;
+  background:var(--bg2);border-top:1px solid var(--line);font-size:10.5px;
+  color:var(--faint);padding:3px 13px;min-height:26px;letter-spacing:.02em}
+.footbar .icp{color:var(--faint);text-decoration:none;transition:color .15s}
+.footbar .icp:hover{color:var(--cy);text-decoration:underline}
+
 .view{flex:1;padding:18px 20px 46px;overflow-y:auto}
 .view h1{font-size:17px;font-weight:700;display:flex;align-items:baseline;gap:12px;letter-spacing:.01em;flex-wrap:wrap}
 .view h1 .cr{color:var(--faint);font-size:12px;font-weight:400}
