@@ -109,15 +109,19 @@ class Scheduler:
             task.last_run_dur = time.monotonic() - started
             now = time.monotonic()
             # overrun 语义（评审 E13）：本轮实际完成时间越过下一轮 deadline →
-            # 被错过的轮次记 skipped，不追跑；next_run 推进到之后
-            next_deadline = task.next_run + task.interval
+            # 被错过的轮次记 skipped，不追跑；next_run 推进到之后。
+            # 2026-10-02 修复：原实现 `max(next_deadline, now) + _next_interval()`
+            # 把 interval 计了两次（next_deadline 已含一个 interval），导致所有
+            # 采集器实测周期恒为 2× 配置值（healthz runs 恰为理论值一半；certs
+            # 实际每 2h 而非 1h → 告警检测延迟被无声放大一倍）。
+            next_deadline = task.next_run + task._next_interval()
             missed = 0
             while next_deadline < now:
                 missed += 1
                 next_deadline += task.interval
             if missed:
                 task.skipped += missed
-            task.next_run = max(next_deadline, now) + task._next_interval()
+            task.next_run = max(next_deadline, now)
             self._seq += 1
             heapq.heappush(self._heap, (task.next_run, self._seq, task))
 

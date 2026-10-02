@@ -35,6 +35,25 @@ async def devices(node: str | None = None):
         status = constants.DEVICE_ONLINE if d.get("online") else constants.DEVICE_OFFLINE
         if d.get("online") and ping.get("timed_out"):
             status = "degraded"
+        # KeyExpiry 预警状态：<14d warn，<3d crit，已过期 crit（阈值同聚合层）
+        key_days = d.get("key_days_left")
+        if key_days is None and d.get("key_expiry_ts"):
+            key_days = round((d["key_expiry_ts"] - time.time()) / 86400, 1)
+        key_status = "ok"
+        if key_days is not None:
+            if key_days <= 0 or key_days < config.THRESHOLDS["ts_key_crit_days"]:
+                key_status = "crit"
+            elif key_days < config.THRESHOLDS["ts_key_warn_days"]:
+                key_status = "warn"
+        def _jlist(raw):
+            if isinstance(raw, list):
+                return raw
+            try:
+                import json as _json
+                v = _json.loads(raw or "[]")
+                return v if isinstance(v, list) else []
+            except (ValueError, TypeError):
+                return []
         out.append({
             "device_id": d["device_id"],
             "name": d.get("name"),
@@ -54,6 +73,15 @@ async def devices(node: str | None = None):
             "timed_out": ping.get("timed_out", False),
             "ping_ts": ping.get("ts"),
             "mapped_8899": mapped,
+            # Phase 2 扩展：密钥有效期 / MagicDNS / 子网路由 / 出口节点
+            "key_expiry_ts": d.get("key_expiry_ts"),
+            "key_days_left": key_days,
+            "key_status": key_status,
+            "dns_name": d.get("dns_name"),
+            "allowed_ips": _jlist(d.get("allowed_ips")),
+            "subnet_routes": _jlist(d.get("subnet_routes")),
+            "exit_node": bool(d.get("exit_node")),
+            "exit_node_option": bool(d.get("exit_node_option")),
         })
     return ok({"devices": out, "device_map": config.DEVICE_MAP})
 

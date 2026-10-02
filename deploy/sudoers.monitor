@@ -2,17 +2,30 @@
 # 安装: sudo install -m 440 -o root -g root deploy/sudoers.monitor /etc/sudoers.d/monitor-panel
 # 校验: sudo visudo -c -f deploy/sudoers.monitor
 #
-# 仅放行 5 类只读命令；tailscale ping 目标在 Python 侧正则校验
+# 仅放行 6 类只读命令；tailscale ping 目标在 Python 侧正则校验
 # （^[0-9a-fA-F:.\-A-Za-z_]+$），exec 走参数列表不经 shell，防注入。
+#
+# ⚠ 与代码逐字对应（任何一侧改参数都必须同步另一侧）：
+#   app/collectors/certs.py    → openssl 第 5 条、/usr/sbin/nginx -T 第 6 条
+#   app/collectors/tailscale.py→ tailscale 两条
+#   app/collectors/network.py  → /bin/ping
+#   参数不匹配的后果：sudo 要求密码 → sudo -n 认证失败 → PAM error 日志
+#   → 触发 R1 日志告警（2026-10-02 复盘：certs 重构加了 -startdate/-issuer
+#   与 nginx -T，白名单未同步，导致每约 2h 一次告警 + 本地证书回退静默失效）
 monitor ALL=(root) NOPASSWD: /usr/bin/tailscale status --json, \
   /usr/bin/tailscale ping *, \
   /usr/bin/headscale nodes list -o json, \
   /bin/ping -c 4 *, \
-  /usr/bin/openssl x509 -in /etc/letsencrypt/live/*/cert.pem -noout -enddate
+  /usr/bin/openssl x509 -in /etc/letsencrypt/live/*/cert.pem -noout -enddate -startdate -issuer, \
+  /usr/sbin/nginx -T
 
 # 说明（对应技术方案 §6 步骤 6）：
 # - tailscale/headscale CLI 走 /usr/bin 绝对路径（which 实测）
 # - ICMP 探测（F7）依赖 ping 的 cap_net_raw（setuid 或 sudo 承担）
-# - /etc/letsencrypt/live 目录 700（root only）→ 白名单 openssl 只读解析证书
+# - /etc/letsencrypt/live 目录 700（root only）→ 白名单 openssl 只读解析证书；
+#   参数逐项列出、不用 * 收尾：openssl x509 支持 -out 写文件，通配会放开
+#   以 root 任意写文件的口子
+# - /usr/sbin/nginx -T：certs 采集器的 nginx 配置 dump（发现 include/conf.d
+#   里的证书目录；主路径仍是直读 /etc/nginx/sites-*，monitor 可读）
 # - 若实测 tailscaled.sock 权限允许普通用户直连（当前 666），
 #   可移除 tailscale 两条白名单（以实测为准）

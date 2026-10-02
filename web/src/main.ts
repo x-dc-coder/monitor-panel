@@ -6,7 +6,7 @@ import { api } from "./api";
 import { S, setCur } from "./state";
 import type {
   AlertsData, CertsData, DevicesData, FrpData, GrmData, HealthzData,
-  HistoryData, NetworkData, OverviewData, ServicesData,
+  HistoryData, NetworkData, OverviewData, ServicesData, UpdatesData,
 } from "./types";
 import { fmtDate, fmtTs } from "./fmt";
 import { isViewId, placeholder, views } from "./views";
@@ -89,9 +89,18 @@ async function pollServices(): Promise<void> {
 }
 async function pollReleases(): Promise<void> {
   try {
-    S.releases = await api<GrmData>("/api/grm");
+    const [grmRes, updatesRes] = await Promise.allSettled([
+      api<GrmData>("/api/grm"),
+      api<UpdatesData>("/api/updates"),
+    ]);
+    if (grmRes.status === "fulfilled") {
+      S.releases = grmRes.value;
+    }
+    if (updatesRes.status === "fulfilled") {
+      S.updates = updatesRes.value;
+    }
     if (S.cur === "releases") render();
-  } catch { /* 静默（grm 降级由 summary.degraded 表达） */ }
+  } catch { /* 静默（降级由 summary.degraded 表达） */ }
 }
 async function pollAlerts(): Promise<void> {
   try {
@@ -135,6 +144,7 @@ function bindView(v: string): void {
   if (v === "links") void import("./views/links").then((m) => m.bindLinks());
   if (v === "probes") void import("./views/probes").then((m) => m.renderProbeOut());
   if (v === "lab") void import("./views/lab").then((m) => m.bindLab());
+  if (v === "releases") void import("./views/releases").then((m) => m.bindReleases());
   // 通用表格交互（分页/筛选/分组）——各视图渲染后挂载
   void import("./table").then((m) => m.bindTableForView(v));
 }

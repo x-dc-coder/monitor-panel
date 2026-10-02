@@ -1,7 +1,7 @@
 /** 轮询结果缓存：pollers 写入，视图读取；切换视图时立即刷新。 */
 import type {
   AlertsData, CertsData, DevicesData, FrpData, GrmData, HealthzData,
-  NetworkData, OverviewData, ServicesData,
+  NetworkData, OverviewData, ServicesData, UpdatesData,
 } from "./types";
 
 export interface SparkCache {
@@ -20,10 +20,13 @@ export const S: {
   probes: NetworkData | null;
   services: ServicesData | null;
   releases: GrmData | null;
+  updates: UpdatesData | null;
   alerts: AlertsData | null;
   healthz: HealthzData | null;
   spark: SparkCache;
   cur: string;
+  /** 服务更新选中的 Provider Tab（"all" 或具体 provider id） */
+  updatesProviderTab: string;
   /** 手动 ping 终端输出（全局，轮询重渲染不丢失） */
   pingLog: string | null;
 } = {
@@ -34,10 +37,12 @@ export const S: {
   probes: null,
   services: null,
   releases: null,
+  updates: null,
   alerts: null,
   healthz: null,
   spark: { cpu: null, mem: null, frp: null, ts: null, lab: null },
   cur: "overview",
+  updatesProviderTab: "all",
   pingLog: null,
 };
 

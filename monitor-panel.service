@@ -2,6 +2,10 @@
 Description=monitor.dc-sy.cn unified monitoring panel (127.0.0.1:8898)
 After=network-online.target
 Wants=network-online.target
+# 防重启风暴（评审 C4/E15）——必须置于 [Unit] 段：放 [Service] 会被 systemd
+# 忽略（2026-10-02 排查：unit 第 21 行报 Unknown key name 'StartLimitIntervalSec'）
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -17,9 +21,6 @@ EnvironmentFile=-/opt/monitor-panel/env
 ExecStart=/opt/monitor-panel/current/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8898 --no-access-log
 Restart=on-failure
 RestartSec=5
-# 防重启风暴（评审 C4/E15）
-StartLimitIntervalSec=300
-StartLimitBurst=5
 # 注意：不用 NoNewPrivileges —— 它阻止 setuid 提权，与"monitor 用户 +
 # sudoers NOPASSWD 白名单"设计冲突（sudo -n 需要提权）。安全由 sudoers
 # 白名单（deploy/sudoers.monitor）+ PrivateTmp + ReadWritePaths 承担。

@@ -7,6 +7,8 @@
 """
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import sqlite3
 import threading
@@ -44,6 +46,12 @@ CREATE TABLE IF NOT EXISTS devices (
   rx_bytes     INTEGER,
   tx_bytes     INTEGER,
   updated_ts   REAL,
+  key_expiry_ts      REAL,     -- tailscale KeyExpiry（Phase 2）
+  dns_name           TEXT,     -- MagicDNS 全名
+  subnet_routes      TEXT,     -- JSON 数组（AllowedIPs/PrimaryRoutes 中的子网路由）
+  allowed_ips        TEXT,     -- JSON 数组（原始 AllowedIPs）
+  exit_node          INTEGER DEFAULT 0,  -- 当前选定的出口节点
+  exit_node_option   INTEGER DEFAULT 0,  -- 可作为出口节点
   PRIMARY KEY (node_id, device_id)
 );
 
@@ -127,6 +135,24 @@ CREATE TABLE IF NOT EXISTS grm_repos (
   UNIQUE(node_id, repo_id)
 );
 CREATE INDEX IF NOT EXISTS idx_grm_repos_pinned ON grm_repos(is_pinned);
+
+CREATE TABLE IF NOT EXISTS update_items (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  node_id        TEXT NOT NULL,
+  provider       TEXT NOT NULL,   -- 来源（grm / 未来其他 UpdateProvider）
+  item_key       TEXT NOT NULL,   -- provider 内唯一键
+  title          TEXT,
+  url            TEXT,
+  version        TEXT,            -- 最新版本/tag
+  version_url    TEXT,
+  is_new         INT DEFAULT 0,   -- 新发布标记
+  prerelease     INT DEFAULT 0,
+  tags           TEXT,            -- JSON 数组
+  published_ts   REAL,
+  updated_ts     REAL,
+  UNIQUE(node_id, provider, item_key)
+);
+CREATE INDEX IF NOT EXISTS idx_update_items ON update_items(provider, is_new);
 """
 
 
@@ -156,8 +182,28 @@ def init_db(db_path: Path | None = None) -> sqlite3.Connection:
             _conn = _connect(path)
             _db_path = path
         _conn.executescript(SCHEMA)
+        _migrate(_conn)
         seed_nodes(config.NODES)
     return _conn
+
+
+_DEVICE_MIGRATION_COLS = {
+    "key_expiry_ts": "REAL", "dns_name": "TEXT", "subnet_routes": "TEXT",
+    "allowed_ips": "TEXT", "exit_node": "INTEGER DEFAULT 0",
+    "exit_node_option": "INTEGER DEFAULT 0",
+}
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """轻量列迁移：SCHEMA 用 CREATE IF NOT EXISTS，旧库新列需 ALTER 补齐。"""
+    for col, decl in _DEVICE_MIGRATION_COLS.items():
+        try:
+            cols = {r["name"] for r in conn.execute(
+                "PRAGMA table_info(devices)").fetchall()}
+            if col not in cols:
+                conn.execute(f"ALTER TABLE devices ADD COLUMN {col} {decl}")
+        except sqlite3.Error:
+            log.warning("db: migrate devices.%s failed", col, exc_info=True)
 
 
 def close() -> None:
@@ -271,6 +317,8 @@ def query_sample_range(metric_name: str) -> tuple[float | None, float | None, in
 _DEVICE_DEFAULTS = {
     "name": None, "tailscale_ip": None, "os": None, "online": 0, "relay": None,
     "last_seen_ts": None, "rx_bytes": 0, "tx_bytes": 0, "updated_ts": None,
+    "key_expiry_ts": None, "dns_name": None, "subnet_routes": None,
+    "allowed_ips": None, "exit_node": 0, "exit_node_option": 0,
 }
 _TUNNEL_DEFAULTS = {
     "type": None, "remote_port": None, "local_addr": None, "status": "unknown",
@@ -283,18 +331,37 @@ def upsert_devices(node_id: str, rows: list[dict]) -> None:
         return
     # 防御：统一补 node_id 与缺失字段（mock/远端上报可能缺键）
     rows = [{**_DEVICE_DEFAULTS, **r, "node_id": node_id} for r in rows]
+    for r in rows:
+        # JSON 数组字段序列化（allowed_ips/subnet_routes 传 list 或 JSON 字符串均可）
+        for col in ("allowed_ips", "subnet_routes"):
+            v = r.get(col)
+            if isinstance(v, list):
+                r[col] = json.dumps(v, ensure_ascii=False)
+            elif v is None:
+                r[col] = "[]"
+        r["exit_node"] = 1 if r.get("exit_node") else 0
+        r["exit_node_option"] = 1 if r.get("exit_node_option") else 0
     conn = _cursor()
     with _lock:
         conn.executemany(
             "INSERT INTO devices(node_id, device_id, name, tailscale_ip, os, online, "
-            "relay, last_seen_ts, rx_bytes, tx_bytes, updated_ts) "
+            "relay, last_seen_ts, rx_bytes, tx_bytes, updated_ts, "
+            "key_expiry_ts, dns_name, subnet_routes, allowed_ips, "
+            "exit_node, exit_node_option) "
             "VALUES (:node_id, :device_id, :name, :tailscale_ip, :os, :online, "
-            ":relay, :last_seen_ts, :rx_bytes, :tx_bytes, :updated_ts) "
+            ":relay, :last_seen_ts, :rx_bytes, :tx_bytes, :updated_ts, "
+            ":key_expiry_ts, :dns_name, :subnet_routes, :allowed_ips, "
+            ":exit_node, :exit_node_option) "
             "ON CONFLICT(node_id, device_id) DO UPDATE SET "
             "name=excluded.name, tailscale_ip=excluded.tailscale_ip, os=excluded.os, "
             "online=excluded.online, relay=excluded.relay, "
             "last_seen_ts=excluded.last_seen_ts, rx_bytes=excluded.rx_bytes, "
-            "tx_bytes=excluded.tx_bytes, updated_ts=excluded.updated_ts",
+            "tx_bytes=excluded.tx_bytes, updated_ts=excluded.updated_ts, "
+            "key_expiry_ts=excluded.key_expiry_ts, dns_name=excluded.dns_name, "
+            "subnet_routes=excluded.subnet_routes, "
+            "allowed_ips=excluded.allowed_ips, "
+            "exit_node=excluded.exit_node, "
+            "exit_node_option=excluded.exit_node_option",
             rows)
         conn.commit()
 
@@ -479,6 +546,76 @@ def get_grm_repos(node_id: str | None = None) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+# ---------------- update_items（Phase 3：服务更新多源统一快照） ----------------
+_UPDATE_ITEM_DEFAULTS = {
+    "title": None, "url": None, "version": None, "version_url": None,
+    "is_new": 0, "prerelease": 0, "tags": "[]", "published_ts": None,
+    "updated_ts": None,
+}
+
+
+def upsert_update_items(node_id: str, rows: list[dict],
+                        prune: bool = False) -> None:
+    """UpdateItem 统一入库：UNIQUE(node_id, provider, item_key)。
+
+    prune=True 时删除该 node 下本轮未出现的行（provider 自治清单语义）。
+    """
+    if not rows:
+        if prune:
+            conn = _cursor()
+            with _lock:
+                conn.execute("DELETE FROM update_items WHERE node_id=?", (node_id,))
+                conn.commit()
+        return
+    rows = [{**_UPDATE_ITEM_DEFAULTS, **r, "node_id": node_id} for r in rows]
+    conn = _cursor()
+    with _lock:
+        conn.executemany(
+            "INSERT INTO update_items(node_id, provider, item_key, title, url, "
+            "version, version_url, is_new, prerelease, tags, published_ts, updated_ts) "
+            "VALUES (:node_id, :provider, :item_key, :title, :url, :version, "
+            ":version_url, :is_new, :prerelease, :tags, :published_ts, :updated_ts) "
+            "ON CONFLICT(node_id, provider, item_key) DO UPDATE SET "
+            "title=excluded.title, url=excluded.url, version=excluded.version, "
+            "version_url=excluded.version_url, is_new=excluded.is_new, "
+            "prerelease=excluded.prerelease, tags=excluded.tags, "
+            "published_ts=excluded.published_ts, updated_ts=excluded.updated_ts",
+            rows)
+        if prune:
+            seen = {(r["provider"], r["item_key"]) for r in rows}
+            keep_ids = [row["id"] for row in conn.execute(
+                "SELECT id, provider, item_key FROM update_items "
+                "WHERE node_id=?", (node_id,)).fetchall()
+                if (row["provider"], row["item_key"]) in seen]
+            if keep_ids:
+                marks = ",".join("?" * len(keep_ids))
+                conn.execute(
+                    f"DELETE FROM update_items WHERE node_id=? "
+                    f"AND id NOT IN ({marks})", [node_id, *keep_ids])
+            else:
+                conn.execute("DELETE FROM update_items WHERE node_id=?", (node_id,))
+        conn.commit()
+
+
+def get_update_items(node_id: str | None = None,
+                     provider: str | None = None) -> list[dict]:
+    conn = _cursor()
+    sql = "SELECT * FROM update_items"
+    conds, params = [], []
+    if node_id:
+        conds.append("node_id=?")
+        params.append(node_id)
+    if provider:
+        conds.append("provider=?")
+        params.append(provider)
+    if conds:
+        sql += " WHERE " + " AND ".join(conds)
+    sql += " ORDER BY is_new DESC, published_ts DESC"
+    with _lock:
+        rows = conn.execute(sql, params).fetchall()
+    return [dict(r) for r in rows]
+
+
 # ---------------- alerts ----------------
 def insert_alert(level: str, source: str, message: str,
                  cooldown_s: float | None = None) -> bool:
@@ -576,3 +713,9 @@ def cleanup(now: float | None = None) -> dict:
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     log.info("cleanup: samples=%d alerts=%d", cur1.rowcount, cur2.rowcount)
     return {"samples": cur1.rowcount, "alerts": cur2.rowcount}
+
+
+async def cleanup_async(now: float | None = None) -> dict:
+    """cleanup 的异步封装：DELETE + checkpoint 是阻塞调用，走 to_thread
+    防止调度器事件循环被磁盘 IO 卡住（Phase 4）。"""
+    return await asyncio.to_thread(cleanup, now)

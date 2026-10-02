@@ -46,7 +46,14 @@ export interface CertSummaryItem {
   domain: string;
   days_left: number;
   not_after?: string;
+  not_before?: string;
+  issuer?: string | null;
+  subject?: string | null;
+  sans?: string[];
+  chain_verified?: boolean | null;
+  source?: string;
   status: string;
+  error?: string | null;
 }
 export interface CertsSummary {
   total: number;
@@ -145,6 +152,15 @@ export interface DeviceRow {
   timed_out: boolean;
   ping_ts: number | null;
   mapped_8899: string | null;
+  // Phase 2 / 设备视图增强字段
+  key_expiry_ts?: number | null;
+  key_days_left?: number | null;
+  key_status?: "ok" | "warn" | "crit";
+  dns_name?: string | null;
+  allowed_ips?: string[];
+  subnet_routes?: string[];
+  exit_node?: boolean;
+  exit_node_option?: boolean;
 }
 export interface DevicesData {
   devices: DeviceRow[];
@@ -235,6 +251,38 @@ export type ServicesData = components["schemas"]["ServicesData"];
 export type GrmRelease = components["schemas"]["GrmLatest"];
 export type GrmRepoRow = components["schemas"]["GrmRepo"];
 export type GrmData = components["schemas"]["GrmApiData"];
+
+/* ---------------- /api/updates（Phase 3/5：服务更新多源扩展） ---------------- */
+export interface UpdateItemRow {
+  provider: string;
+  item_key: string;
+  title: string | null;
+  url: string | null;
+  version: string | null;
+  version_url: string | null;
+  is_new: boolean;
+  prerelease: boolean;
+  tags: string[];
+  published_ts: number | null;
+  updated_ts: number | null;
+  is_pinned?: boolean;
+  summary?: string | null;
+}
+
+export interface UpdatesSummary {
+  total: number;
+  new: number;
+  with_version: number;
+  degraded: boolean;
+  error?: string | null;
+}
+
+export interface UpdatesData {
+  items: UpdateItemRow[];
+  providers: string[];
+  summary: UpdatesSummary;
+  ts: number;
+}
 
 /* ---------------- /api/alerts ---------------- */
 export type AlertLevel = "info" | "warn" | "crit";

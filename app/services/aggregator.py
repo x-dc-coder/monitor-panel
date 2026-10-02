@@ -66,6 +66,9 @@ class Aggregator:
         devices = payload.get("devices", [])
         if devices:
             db.upsert_devices(result.node_id, devices)
+        # 设备密钥有效期（KeyExpiry）预警：离线设备不判（先例：防休眠误报）
+        for dev in devices:
+            self._check_key_expiry(dev)
         # ping 结果：在线+超时防抖告警；离线清除状态不告警
         for dev in devices:
             dev_id = dev.get("device_id")
@@ -110,6 +113,26 @@ class Aggregator:
                                 f"{host} 丢包 {loss}% 超过警告阈值")
                 else:
                     db.resolve_alerts(f"ts:{host}")
+
+    def _check_key_expiry(self, dev: dict) -> None:
+        """KeyExpiry 预警：<14d warn、<3d crit、已过期 crit；正常/未知自动 resolve。"""
+        host = dev.get("name") or dev.get("device_id")
+        src = f"ts_key:{host}"
+        days = dev.get("key_days_left")
+        if not dev.get("online") or days is None:
+            db.resolve_alerts(src)
+            return
+        if days <= 0:
+            self._alert(constants.LEVEL_CRIT, src,
+                        f"{host} tailscale 密钥已过期 {abs(days):.0f} 天（设备将无法重连）")
+        elif days < config.THRESHOLDS["ts_key_crit_days"]:
+            self._alert(constants.LEVEL_CRIT, src,
+                        f"{host} tailscale 密钥 {days:.0f} 天后过期")
+        elif days < config.THRESHOLDS["ts_key_warn_days"]:
+            self._alert(constants.LEVEL_WARN, src,
+                        f"{host} tailscale 密钥 {days:.0f} 天后过期，请预授权续期")
+        else:
+            db.resolve_alerts(src)
 
     # ---------------- frp ----------------
     def _on_frp_traffic(self, result: CollectorResult, ts: float) -> None:
@@ -176,14 +199,17 @@ class Aggregator:
         certs = (result.payload or {}).get("certs") or []
         for c in certs:
             domain = c.get("domain")
-            days = c.get("days_left")
-            if days is None or not domain:
+            if not domain:
                 continue
             src = f"cert:{domain}"
-            if days < config.THRESHOLDS["cert_crit_days"]:
-                self._alert(constants.LEVEL_CRIT, src,
-                            f"证书 {domain} 剩余 {days:.0f} 天，即将过期")
-            elif days < config.THRESHOLDS["cert_warn_days"]:
+            error = c.get("error")
+            days = c.get("days_left")
+            if error or c.get("status") == constants.LEVEL_CRIT or                (days is not None and days < config.THRESHOLDS["cert_crit_days"]):
+                msg = (f"证书 {domain} 探测失败：{error}"
+                       if error else
+                       f"证书 {domain} 剩余 {days:.0f} 天，即将过期")
+                self._alert(constants.LEVEL_CRIT, src, msg)
+            elif days is not None and days < config.THRESHOLDS["cert_warn_days"]:
                 self._alert(constants.LEVEL_WARN, src,
                             f"证书 {domain} 剩余 {days:.0f} 天")
             else:
@@ -302,7 +328,13 @@ class Aggregator:
         if payload.get("degraded"):
             # 数据源不可读：保留上一轮快照不清空、不告警刷屏（frp 降级先例）
             return
-        db.upsert_grm_repos(result.node_id, payload.get("repos") or [])
+        rows = payload.get("repos") or []
+        db.upsert_grm_repos(result.node_id, rows)
+        # Phase 3：同步写入统一 update_items（grm 为首个 UpdateProvider）
+        from app.collectors.updates import grm as grm_provider
+        items = grm_provider.rows_to_items(result.node_id, rows, ts)
+        if items:
+            db.upsert_update_items(result.node_id, items)
 
     # ---------------- 告警 ----------------
     @staticmethod

@@ -31,3 +31,15 @@ deploy/.snapshots/
 # pnpm 意外生成（本仓库用 esbuild 直用，无需 pnpm 管理）
 pnpm-lock.yaml
 pnpm-workspace.yaml
+
+# github-workflow shared ignore rules
+Thumbs.db
+.idea/
+.vscode/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.coverage
+/dist/
+!web/dist/
+*.egg-info/dist/

@@ -21,19 +21,69 @@ function latCell(d: DeviceRow): string {
 
 function pingCell(d: DeviceRow): string {
   return '<button type="button" class="tbtn ping-btn" data-id="' + esc(d.device_id) +
-    '" data-ip="' + esc(d.tailscale_ip) + '" data-n="' + esc(d.name) + '">[ping]</button>';
+    '" data-ip="' + esc(d.tailscale_ip || "") + '" data-n="' + esc(d.name || "") + '">[ping]</button>';
+}
+
+/** 路径徽章：直连 vs DERP（带区域名） */
+function pathCell(d: DeviceRow): string {
+  if (!d.online) return '<span class="muted">—</span>';
+  if (d.relay) {
+    return '<span class="badge dev-derp-badge" title="DERP 中继路径">DERP(' + esc(d.relay) + ")</span>";
+  }
+  return '<span class="badge dev-direct-badge" title="P2P 直连打洞">直连 Direct</span>';
+}
+
+/** 密钥到期（Key Expiry）倒计时与预警指示 */
+function keyExpiryCell(d: DeviceRow): string {
+  const days = d.key_days_left;
+  if (days === null || days === undefined) {
+    return '<span class="muted">—</span>';
+  }
+  if (days <= 0) {
+    return '<span class="key-crit" title="密钥已过期，无法重连">已过期 ' + Math.abs(Math.round(days)) + "d</span>";
+  }
+  if (days < 3) {
+    return '<span class="key-crit" title="严重警告：密钥即将到期">' + Math.round(days) + "d 🚨</span>";
+  }
+  if (days < 14) {
+    return '<span class="key-warn" title="预警：请及时授权续期">' + Math.round(days) + "d ⚠️</span>";
+  }
+  return '<span class="num muted">' + Math.round(days) + "d</span>";
+}
+
+/** 节点能力徽章：出口节点（Exit Node）与子网路由（Subnet Router） */
+function roleBadgesCell(d: DeviceRow): string {
+  const badges: string[] = [];
+  if (d.exit_node) {
+    badges.push('<span class="badge dev-exit-badge" title="当前活跃的出口节点">Exit Node ★</span>');
+  } else if (d.exit_node_option) {
+    badges.push('<span class="badge dev-exit-opt" title="支持作为出口节点">Exit Opt</span>');
+  }
+
+  if (d.subnet_routes && d.subnet_routes.length > 0) {
+    const routeTitle = d.subnet_routes.join(", ");
+    badges.push('<span class="badge dev-subnet-badge" title="子网路由广播: ' + esc(routeTitle) + '">Subnet (' + d.subnet_routes.length + ")</span>");
+  }
+
+  return badges.length ? '<div class="dev-role-badges">' + badges.join(" ") + "</div>" : '<span class="muted">—</span>';
+}
+
+/** 主机与 MagicDNS 展示 */
+function hostCell(d: DeviceRow): string {
+  const hostName = esc(d.name || d.device_id);
+  const dnsName = d.dns_name ? '<div class="muted sm dev-dns-name" title="MagicDNS 完整域名">' + esc(d.dns_name) + "</div>" : "";
+  return '<div class="dev-host-cell"><b>' + hostName + "</b>" + dnsName + "</div>";
 }
 
 const def: TableDef = {
   cols: [
-    { key: "name", label: "HOST" },
-    { key: "tailscale_ip", label: "IP", fmt: (d) => '<span class="muted">' + esc(d.tailscale_ip) + "</span>" },
+    { key: "name", label: "HOST / MagicDNS", fmt: hostCell },
+    { key: "tailscale_ip", label: "IP", fmt: (d) => '<span class="muted num">' + esc(d.tailscale_ip || "—") + "</span>" },
     { key: "os", label: "OS", filterable: true, sec: true, fmt: (d) => esc(d.os || "—") },
     { key: "status", label: "状态", filterable: true, fmt: statusCell },
-    {
-      key: "relay", label: "路径",
-      fmt: (d) => '<span class="dim2">' + (d.relay ? "DERP(" + esc(d.relay) + ")" : "直连") + "</span>",
-    },
+    { key: "path", label: "路径", filterable: true, fmt: pathCell },
+    { key: "role", label: "路由 / 出口", sec: true, fmt: roleBadgesCell },
+    { key: "key_expiry", label: "密钥到期", sec: true, fmt: keyExpiryCell },
     { key: "latency_ms", label: "延迟(中位)", fmt: latCell },
     { key: "mapped_8899", label: "8899", sec: true, fmt: (d) => '<span class="muted">' + esc(d.mapped_8899 || "—") + "</span>" },
     { key: "ping", label: "", fmt: pingCell },
@@ -45,8 +95,13 @@ const def: TableDef = {
 export function renderDevices(): string {
   const devs = S.devices ? S.devices.devices : [];
   const online = devs.filter((d) => d.online).length;
-  return pageHead("~/console/devices", "设备", online + " 在线",
-    "tailscale status --json && tailscale ping <ip> --c 3 · 表格支持状态/OS 筛选与分页") +
+  const keyWarningCount = devs.filter((d) => d.key_days_left !== null && d.key_days_left !== undefined && d.key_days_left < 14).length;
+
+  const summary = online + " 在线" +
+    (keyWarningCount > 0 ? ' · <span style="color:var(--warn)">' + keyWarningCount + " 密钥预警</span>" : "");
+
+  return pageHead("~/console/devices", "设备", summary,
+    "tailscale status --json && tailscale ping <ip> --c 3 · MagicDNS / 密钥到期 / DERP / 子网路由") +
     win("设备清单 · devices", devs.length + " 台 · ping 轮巡 60s/台 · Semaphore(2)",
       table(def, devs, TABLE_ID)) +
     (S.pingLog ? '<div class="tout" id="ping-out">' + S.pingLog + '</div>'

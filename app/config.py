@@ -132,9 +132,18 @@ HEADSCALE_TCP_HOST = _env("MONITOR_HEADSCALE_TCP_HOST", "127.0.0.1")
 HEADSCALE_TCP_PORT = _env_int("MONITOR_HEADSCALE_TCP_PORT", 8080)
 HEADSCALE_DERP_REGION = _env_int("MONITOR_HEADSCALE_DERP_REGION", 999)
 
-# 证书扫描（/etc/letsencrypt/live 目录 700，经 sudoers 白名单 openssl 读取）
-CERT_DOMAINS = _env_json("MONITOR_CERT_DOMAINS",
-                         ["dc-sy.cn", "headscale.dc-sy.cn", "monitor.dc-sy.cn"])
+# 证书扫描：TLS SNI 主动探测（443 握手，免 root）为主，nginx 动态发现与
+# /etc/letsencrypt/live 本地文件（sudoers 白名单 openssl）为辅
+CERT_DOMAINS = _env_json("MONITOR_CERT_DOMAINS", [
+    "dc-sy.cn",
+    "www.dc-sy.cn",
+    "monitor.dc-sy.cn",
+    "headscale.dc-sy.cn",
+    "sso.dc-sy.cn",
+    "releases.monitor.dc-sy.cn",
+    "spark.dc-sy.cn",
+    "cloudreve.dc-sy.cn",
+])
 LETSENCRYPT_LIVE = Path(_env("MONITOR_LETSENCRYPT_LIVE", "/etc/letsencrypt/live"))
 
 # 探测对（F4 多云兜底雏形；cloud-2 接入后再补对等探测——2026-08-24 审查移除
@@ -161,16 +170,29 @@ GRM_DATA_PATH = Path(_env("MONITOR_GRM_DATA_PATH",
                           "/opt/github-release-monitor/data/repositories.json"))
 GRM_BASE_URL = _env("MONITOR_GRM_BASE_URL", "https://releases.monitor.dc-sy.cn")
 
+# ================= 服务更新多源聚合（Phase 3：留口子设计） =================
+# 启用的 UpdateProvider 名称（app/collectors/updates 注册表键）；grm 为首个实现
+UPDATE_PROVIDERS = _env_json("MONITOR_UPDATE_PROVIDERS", ["grm"])
+
 # ================= 服务台账（issue #2：端口约定驱动自动发现） =================
 # 约定区：自定义项目/网站统一绑定 [lo, hi] 内端口（文档 docs/05-服务台账与端口约定.md），
 # 面板自动扫描该区间完成服务发现 + 探活；区间外固定端口走 manual 登记（db source=manual）。
 SERVICES_PORT_RANGE = _env_json("MONITOR_SERVICES_PORT_RANGE", [10000, 19999])
-SERVICES_ALIASES = _env_json("MONITOR_SERVICES_ALIASES", {})      # {"ip:port": "显示名"}
+SERVICES_ALIASES = _env_json("MONITOR_SERVICES_ALIASES", {      # {"ip:port": "显示名"}
+    "127.0.0.1:8000": "Casdoor（SSO）",
+    "127.0.0.1:8787": "Spark",
+    "127.0.0.1:5212": "Cloudreve",
+    "127.0.0.1:9000": "Doge Gateway",
+    "127.0.0.1:5432": "PostgreSQL",
+})
 # 约定区外必探端口（按设备 IP）：{"100.64.0.1": [22, 443]} 或带探测选项的对象形态
 #   {"100.64.0.1": {"443": {"host": "monitor.dc-sy.cn", "https": true, "path": "/"}}}
 #   host=Host 头/SNI 域名（nginx 虚拟主机按域名路由，IP 探测会 404）；https=TLS 探测；
 #   path=请求路径（如 /metrics）；"*"=所有设备，"local"=本机 127.0.0.1
-SERVICES_EXTRA_PORTS = _env_json("MONITOR_SERVICES_EXTRA_PORTS", {})
+SERVICES_EXTRA_PORTS = _env_json("MONITOR_SERVICES_EXTRA_PORTS", {
+    # 云上核心服务（docs/05 台账：约定区外固定端口，local=本机 127.0.0.1）
+    "local": [8000, 8787, 5212, 9000, 5432],
+})
 # 服务公网直达地址：{"ip:port": "https://..."}，面板链接用它；未配置的内网/回环地址仅展示标记
 SERVICES_PUBLIC_URLS = _env_json("MONITOR_SERVICES_PUBLIC_URLS", {})
 SERVICES_SCAN_BATCH = _env_int("MONITOR_SERVICES_SCAN_BATCH", 256)   # 每轮每设备扫描端口数（分片）
@@ -215,6 +237,9 @@ THRESHOLDS = {
     "cert_crit_days": _env_int("MONITOR_THRESHOLD_CERT_CRIT_DAYS", 7),
     "disk_warn_pct": _env_float("MONITOR_THRESHOLD_DISK_WARN", 85),
     "disk_crit_pct": _env_float("MONITOR_THRESHOLD_DISK_CRIT", 92),
+    # tailscale 设备密钥（KeyExpiry）预警：<14d warn，<3d crit，已过期 crit
+    "ts_key_warn_days": _env_int("MONITOR_THRESHOLD_TS_KEY_WARN_DAYS", 14),
+    "ts_key_crit_days": _env_int("MONITOR_THRESHOLD_TS_KEY_CRIT_DAYS", 3),
 }
 ALERT_COOLDOWN_S = _env_float("MONITOR_ALERT_COOLDOWN_S", 1800)   # 同类告警 30min 冷却
 NETWORK_PROBE_ALERT = _env_bool("MONITOR_NETWORK_PROBE_ALERT", False)  # 探测告警默认关

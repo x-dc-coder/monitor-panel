@@ -4,6 +4,92 @@
  */
 
 export interface paths {
+    "/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Login
+         * @description 发起 SSO 登录跳转。
+         */
+        get: operations["login_auth_login_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Auth Callback
+         * @description Casdoor 登录成功回调，换取 Token 并写入 Session。
+         */
+        get: operations["auth_callback_auth_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Logout
+         * @description 单点退出（RP-initiated logout）：清空本地 Session，并让 Casdoor
+         *     清除其会话后把浏览器跳回本面板登录页（/auth/login → 302 到 Casdoor
+         *     授权页 = 登录表单）。
+         *
+         *     注意：必须用 Casdoor 的 post_logout_redirect_uri 参数（而非
+         *     redirect_uri），且该地址要注册在应用 Redirect URLs 列表，否则
+         *     Casdoor 只返回 JSON 不跳转（2026-09-09 官方文档 + 实测）。
+         */
+        get: operations["logout_auth_logout_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Me
+         * @description 获取当前已登录用户信息（前端调用）。
+         */
+        get: operations["me_api_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/overview": {
         parameters: {
             query?: never;
@@ -186,6 +272,23 @@ export interface paths {
         };
         /** Services */
         get: operations["services_api_services_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/updates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Updates */
+        get: operations["updates_api_updates_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -394,6 +497,86 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    login_auth_login_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    auth_callback_auth_callback_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    logout_auth_logout_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    me_api_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     overview_api_overview_get: {
         parameters: {
             query?: never;
@@ -669,6 +852,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_ServicesData_"];
+                };
+            };
+        };
+    };
+    updates_api_updates_get: {
+        parameters: {
+            query?: {
+                provider?: string | null;
+                node?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

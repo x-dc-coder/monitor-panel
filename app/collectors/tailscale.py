@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
 import logging
 import re
@@ -49,6 +50,55 @@ _MOCK_PING_MS = {  # 3 包（t1 实测样本）
     "100.64.0.3": [86, 29, 27],
     "100.64.0.4": [134, 67, 26],
 }
+
+
+# tailscale CGNAT 地址块（100.64.0.0/10 全量覆盖；旧实现 startswith("100.64.")
+# 漏掉 100.65.x~100.127.x）
+_TS_V4_NET = ipaddress.ip_network("100.64.0.0/10")
+
+
+def _pick_ts_ipv4(ips: list) -> str | None:
+    """tailscale IPv4 选取：优先 100.64.0.0/10 内地址，其次任意 IPv4，最后原样回退。"""
+    for ip in ips or []:
+        try:
+            if ipaddress.ip_address(ip) in _TS_V4_NET:
+                return ip
+        except ValueError:
+            continue
+    for ip in ips or []:
+        try:
+            if ipaddress.ip_address(ip).version == 4:
+                return ip
+        except ValueError:
+            continue
+    return next(iter(ips or []), None)
+
+
+def _parse_iso_ts(raw: str | None) -> float | None:
+    if not raw or raw.startswith("0001-01-01"):
+        return None
+    from datetime import datetime
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
+def _subnet_routes(allowed: list, primary: list, own_ip: str | None) -> list[str]:
+    """子网路由清单：AllowedIPs/PrimaryRoutes 中去掉本机 /32 与 CGNAT 单地址。"""
+    out: list[str] = []
+    for cidr in list(allowed or []) + list(primary or []):
+        try:
+            net = ipaddress.ip_network(cidr, strict=False)
+        except ValueError:
+            continue
+        if net.num_addresses == 1:            # /32 或 /128 单地址（节点自身）
+            continue
+        if net == _TS_V4_NET:                # 全锥 CGNAT（接受路由）不算子网路由
+            continue
+        if cidr not in out:
+            out.append(cidr)
+    return out
 
 
 class TailscaleCollector(Collector):
@@ -99,6 +149,7 @@ class TailscaleCollector(Collector):
                           "ts": ts, "mock": True}
         return result
 
+
     # ---------------- real ----------------
     async def _fetch_status(self) -> dict:
         rc, out, err = await run_cmd([config.TAILSCALE_CMD, "status", "--json"],
@@ -127,14 +178,19 @@ class TailscaleCollector(Collector):
             return None
 
     def _norm_device(self, key: str, p: dict, is_self: bool = False) -> dict:
-        ips = p.get("TailscaleIPs") or []
-        v4 = next((ip for ip in ips if ip.startswith("100.64.")), None) or             next(iter(ips), None)
+        v4 = _pick_ts_ipv4(p.get("TailscaleIPs") or [])
         # Self 对象无 BackendState（在 status --json 顶层），但 Self.Online 存在；
         # 统一用 Online 字段判定（修复 Self 节点恒为 offline 的 bug）
         online = bool(p.get("Online", False))
         relay = None if is_self else (p.get("Relay") or
                                       ("direct" if p.get("CurAddr") else None))
         last_seen = self._parse_last_seen(p.get("LastSeen"))
+        # KeyExpiry：设备密钥过期时间（headscale 预授权密钥过期后设备无法重连）
+        key_expiry_ts = _parse_iso_ts(p.get("KeyExpiry"))
+        key_days_left = None
+        if key_expiry_ts is not None:
+            key_days_left = round((key_expiry_ts - time.time()) / 86400, 1)
+        exit_node = bool(p.get("ExitNode"))               # 当前选定的出口节点
         return {
             "node_id": config.NODE_ID,
             # 脱敏：tailscale 节点 ID 含敏感指纹（评审 F4/E6）→ sha256 截断 8 位，
@@ -149,6 +205,16 @@ class TailscaleCollector(Collector):
             "rx_bytes": p.get("RxBytes") or 0,
             "tx_bytes": p.get("TxBytes") or 0,
             "updated_ts": time.time(),
+            # Phase 2 扩展字段
+            "key_expiry_ts": key_expiry_ts,
+            "key_days_left": key_days_left,
+            "dns_name": p.get("DNSName", "").rstrip(".") or None,   # MagicDNS 全名
+            "allowed_ips": list(p.get("AllowedIPs") or []),
+            "primary_routes": list(p.get("PrimaryRoutes") or []),
+            "subnet_routes": _subnet_routes(p.get("AllowedIPs"),
+                                            p.get("PrimaryRoutes"), v4),
+            "exit_node": exit_node,
+            "exit_node_option": bool(p.get("ExitNodeOption", False)),
         }
 
     async def _do_ping(self, ip: str, hostname: str, device_id: str) -> dict:

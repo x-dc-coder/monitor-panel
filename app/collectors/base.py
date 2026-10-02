@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
+import signal
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -65,20 +67,26 @@ async def run_cmd(args: list[str], timeout: float | None = None,
     """执行子进程（参数列表，不经 shell）。
 
     - sudo=True 时前缀 sudo -n（sudoers NOPASSWD 白名单）
-    - 超时 proc.kill() + await wait()，防僵尸/句柄泄漏（评审 E4）
+    - start_new_session=True 让子进程独占进程组；超时用 os.killpg 杀整个
+      组——tailscale ping 等命令自带的孙进程（sudo 包装）不会被遗留成孤儿
     返回 (returncode, stdout, stderr)。
     """
     timeout = timeout or config.STEP_TIMEOUT
     cmd = (["sudo", "-n"] if sudo else []) + list(args)
     proc = await asyncio.create_subprocess_exec(
-        *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        start_new_session=True)
     try:
         out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
     except asyncio.TimeoutError:
+        # 杀整个进程组（子进程 + 其派生的孙进程），再收割防僵尸/句柄泄漏
         try:
-            proc.kill()
-        except ProcessLookupError:
-            pass
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
         await proc.wait()  # 确保收割
         raise CollectorError(f"cmd timeout after {timeout}s: {' '.join(cmd)}") from None
     return proc.returncode or 0, out.decode("utf-8", errors="replace"), \

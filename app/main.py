@@ -18,7 +18,8 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app import api as api_mod
 from app import config, db
-from app.api import auth, devices, frp, grm, history, ingest, overview, services, system
+from app.api import (auth, devices, frp, grm, history, ingest, overview,
+                     services, system, updates)
 from app.collectors import build_registry
 from app.scheduler import Scheduler
 from app.services.aggregator import Aggregator
@@ -66,7 +67,7 @@ async def lifespan(app: FastAPI):
         sched.add(name, c.interval, lambda c=c: collector_job(c))
 
     async def cleanup_job() -> None:
-        db.cleanup()
+        await db.cleanup_async()   # DELETE+checkpoint 走 to_thread，不阻塞事件循环
     sched.add("cleanup", config.CLEANUP_INTERVAL_S, cleanup_job, timeout=30)
 
     run_task = asyncio.create_task(sched.run())
@@ -100,11 +101,13 @@ async def auth_guard_middleware(request: Request, call_next):
     # 1. 认证路由自身：/auth/*
     # 2. 健康检查：/api/healthz（deploy.sh 健康检查强依赖）
     # 3. 监控指标上报：/api/ingest（dc-desktop 等 agent 走独立 Bearer token 校验）
-    # 4. 静态资源（js/css/图片/图标/字体等）
+    # 4. 静态资源：收紧为面板实际产出的清单（Phase 4）——任意路径 .js/.css
+    #    后缀放行会让未认证者读到 web/dist 下任意脚本
     if (
         path.startswith("/auth/")
         or path == "/api/healthz"
         or path == "/api/ingest"
+        or path in ("/app.js", "/style.css", "/favicon.svg")
         or path.endswith((".js", ".css", ".png", ".jpg", ".svg", ".ico", ".woff", ".woff2", ".map"))
     ):
         return await call_next(request)
@@ -133,7 +136,8 @@ app.add_middleware(
 app.include_router(auth.router)
 
 for router in (overview.router, devices.router, frp.router, grm.router,
-               history.router, system.router, services.router, ingest.router):
+               history.router, system.router, services.router, ingest.router,
+               updates.router):
     app.include_router(router, prefix="/api")
 
 
