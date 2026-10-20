@@ -38,11 +38,17 @@ health_check() {
   echo "→ 健康检查 (127.0.0.1:8898/api/healthz)…"
   # 双重校验（issue #1）：ok:true 之外还要求 mode=live/snapshot——
   # 曾发生 .env 未跟随 release → 静默回落 mock → 假数据面板照样过检查
-  if ssh "${SSH_OPTS[@]}" "$HOST" "curl -fsS --max-time 10 http://127.0.0.1:8898/api/healthz | grep -q '\"ok\":true' && curl -fsS --max-time 10 http://127.0.0.1:8898/api/healthz | grep -qE '\"mode\":\"(live|snapshot)\"'"; then
-    echo "✓ 健康检查通过（mode 非 mock）"
-    return 0
-  fi
-  echo "✗ 健康检查失败（服务未起或回落 mock：检查 /opt/monitor-panel/env 是否存在且含必需凭据）"
+  # 重试窗口 60s：新版首次启动可能补建 samples 索引（400 万行），
+  # 端口绑定晚于单次检查会被误判失败（2026-10-20 部署实录）
+  local attempt
+  for attempt in $(seq 1 20); do
+    if ssh "${SSH_OPTS[@]}" "$HOST" "curl -fsS --max-time 10 http://127.0.0.1:8898/api/healthz | grep -q '\"ok\":true' && curl -fsS --max-time 10 http://127.0.0.1:8898/api/healthz | grep -qE '\"mode\":\"(live|snapshot)\"'"; then
+      echo "✓ 健康检查通过（mode 非 mock，第 ${attempt} 次尝试）"
+      return 0
+    fi
+    sleep 3
+  done
+  echo "✗ 健康检查失败（60s 未起或回落 mock：检查 /opt/monitor-panel/env 是否存在且含必需凭据）"
   return 1
 }
 
