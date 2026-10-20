@@ -68,6 +68,9 @@ button{font-family:inherit;color:inherit;background:none;border:none;cursor:poin
 .statusbar .right{margin-left:auto;display:flex}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 
+.node-chip{margin-right:6px}
+.node-chip.stale{color:var(--warn)}
+
 /* ================= 视图通用 ================= */
 /* ================= 底部备案栏（布局内常驻，不遮挡内容） ================= */
 .footbar{flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:8px;

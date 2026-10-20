@@ -14,9 +14,9 @@ function kpi(
   s2: string,
   extra: string,
   spCls: string,
-  sparkKey: keyof typeof S.spark,
+  sparkKey?: keyof typeof S.spark | null,
 ): string {
-  const sp = S.spark[sparkKey];
+  const sp = sparkKey ? S.spark[sparkKey] : null;
   return '<div class="kpi ' + extra + '"><div class="t"><span><span class="idx">' + idx +
     "</span> " + label + "</span></div>" +
     '<div class="v">' + val + (sm ? "<small>" + esc(sm) + "</small>" : "") + "</div>" +
@@ -60,9 +60,9 @@ export function renderOverview(): string {
       "", "violet", "ts") +
     kpi("05", "CERTS", certBad ? String(certBad) : "0", certBad ? "异常" : "",
       expiring ? expiring.domain + " " + Math.round(expiring.days_left) + "d" : "全部正常",
-      c.total != null ? c.total + " 张" : "—", certBad ? "warn" : "", "amber", "cpu") +
+      c.total != null ? c.total + " 张" : "—", certBad ? "warn" : "", "amber", null) +
     kpi("06", "PROBES", probesOk, "可达",
-      (n.fail || 0) + " fail", "共 " + (n.total || 0) + " 目标", "", "", "cpu") +
+      (n.fail || 0) + " fail", "共 " + (n.total || 0) + " 目标", "", "", null) +
     kpi("07", "LAB GPU",
       o.lab && o.lab.vram_used_mib != null && o.lab.vram_total_mib
         ? fmtBytes(o.lab.vram_used_mib * 1048576) + " / " + fmtBytes(o.lab.vram_total_mib * 1048576)

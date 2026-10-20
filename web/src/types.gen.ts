@@ -579,7 +579,9 @@ export interface operations {
     };
     overview_api_overview_get: {
         parameters: {
-            query?: never;
+            query?: {
+                node?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -593,6 +595,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -724,7 +735,9 @@ export interface operations {
     };
     grm_api_grm_get: {
         parameters: {
-            query?: never;
+            query?: {
+                node?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -740,6 +753,15 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope_GrmApiData_"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     history_api_history_get: {
@@ -749,6 +771,7 @@ export interface operations {
                 range?: string;
                 bucket?: number | null;
                 group?: string | null;
+                node?: string | null;
             };
             header?: never;
             path?: never;
@@ -778,7 +801,9 @@ export interface operations {
     };
     system_api_system_get: {
         parameters: {
-            query?: never;
+            query?: {
+                node?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -792,13 +817,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
     certs_api_certs_get: {
         parameters: {
-            query?: never;
+            query?: {
+                node?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -814,11 +850,22 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     network_api_network_get: {
         parameters: {
-            query?: never;
+            query?: {
+                node?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -832,6 +879,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

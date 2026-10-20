@@ -9,7 +9,11 @@ import type {
   HistoryData, NetworkData, OverviewData, ServicesData, UpdatesData,
 } from "./types";
 import { fmtDate, fmtTs } from "./fmt";
+import { guard } from "./guard";
+import { esc } from "./ui";
 import { isViewId, placeholder, views } from "./views";
+
+export { guard };
 
 /* ---------------- 顶栏 / 侧栏 ---------------- */
 function renderStatusbar(): void {
@@ -40,8 +44,22 @@ function renderStatusbar(): void {
   dot("alerts", (o.alerts && o.alerts.unresolved) > 0 ? "crit" : "ok");
   const lab = o.lab;
   dot("lab", !lab ? "off" : lab.monitor_enabled === 1 ? "ok" : "warn");
-  document.getElementById("foot-node")!.textContent =
-    (o.nodes && o.nodes[0] && o.nodes[0].id) || "—";
+  const footNodeEl = document.getElementById("foot-node");
+  if (footNodeEl) {
+    if (o.nodes && o.nodes.length > 0) {
+      const now = Date.now() / 1000;
+      footNodeEl.innerHTML = o.nodes.map((node) => {
+        const isStale = node.last_seen_ts != null && (now - node.last_seen_ts > 300);
+        const titleAttr = node.last_seen_ts != null
+          ? ' title="last_seen: ' + fmtTs(node.last_seen_ts) + '"'
+          : "";
+        const cls = "node-chip" + (isStale ? " stale" : "");
+        return '<span class="' + cls + '"' + titleAttr + ">" + esc(node.id) + "</span>";
+      }).join("");
+    } else {
+      footNodeEl.textContent = "—";
+    }
+  }
   const modeTxt = o.mode === "snapshot" ? "SNAPSHOT" : o.mock ? "MOCK" : "实时";
   document.getElementById("foot-mode")!.textContent = modeTxt;
   document.getElementById("foot-mode")!.style.color =
@@ -163,6 +181,9 @@ function render(): void {
 // 表格内交互（筛选/分页/分组）触发重渲染
 document.addEventListener("table-change", () => render());
 
+// 节点切换接缝：监听 node-change 立即触发一轮 pollOverview
+window.addEventListener("node-change", () => void pollOverview());
+
 window.addEventListener("hashchange", render);
 
 async function checkCurrentUser(): Promise<void> {
@@ -198,16 +219,16 @@ function boot(): void {
   void pollReleases();
   void pollAlerts();
   void pollHealthz();
-  window.setInterval(() => void pollOverview(), 5000);
-  window.setInterval(() => void pollDevices(), 10000);
-  window.setInterval(() => void pollFrp(), 10000);
-  window.setInterval(() => void pollAlerts(), 10000);
-  window.setInterval(() => void pollCerts(), 30000);
-  window.setInterval(() => void pollProbes(), 30000);
-  window.setInterval(() => void pollServices(), 30000);
-  window.setInterval(() => void pollReleases(), 30000);
-  window.setInterval(() => void pollHealthz(), 30000);
-  window.setInterval(() => void refreshSpark(), 30000);
+  window.setInterval(guard(pollOverview), 5000);
+  window.setInterval(guard(pollDevices), 10000);
+  window.setInterval(guard(pollFrp), 10000);
+  window.setInterval(guard(pollAlerts), 10000);
+  window.setInterval(guard(pollCerts), 30000);
+  window.setInterval(guard(pollProbes), 30000);
+  window.setInterval(guard(pollServices), 30000);
+  window.setInterval(guard(pollReleases), 30000);
+  window.setInterval(guard(pollHealthz), 30000);
+  window.setInterval(guard(refreshSpark), 30000);
 }
 
 boot();

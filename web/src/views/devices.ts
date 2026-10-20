@@ -106,8 +106,7 @@ export function renderDevices(): string {
       table(def, devs, TABLE_ID)) +
     (S.pingLog ? '<div class="tout" id="ping-out">' + S.pingLog + '</div>'
       : '<div class="tout" id="ping-out"><div class="ln"><span class="ps">$</span> ' +
-        '<span class="out">tailscale ping &lt;ip&gt; — 点击 [ping] 执行<span class="caret"></span></span></div></div>') +
-    "</div>";
+        '<span class="out">tailscale ping &lt;ip&gt; — 点击 [ping] 执行<span class="caret"></span></span></div></div>');
 }
 
 /** 绑定 [ping] 按钮（视图渲染后调用）；429 显示限流提示 */

@@ -27,6 +27,8 @@ export const S: {
   cur: string;
   /** 服务更新选中的 Provider Tab（"all" 或具体 provider id） */
   updatesProviderTab: string;
+  /** 当前选中的目标节点 ID（null = 缺省本机） */
+  nodeId: string | null;
   /** 手动 ping 终端输出（全局，轮询重渲染不丢失） */
   pingLog: string | null;
 } = {
@@ -43,9 +45,17 @@ export const S: {
   spark: { cpu: null, mem: null, frp: null, ts: null, lab: null },
   cur: "overview",
   updatesProviderTab: "all",
+  nodeId: null,
   pingLog: null,
 };
 
 export function setCur(v: string): void {
   S.cur = v;
+}
+
+export function setNode(id: string | null): void {
+  S.nodeId = id;
+  if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+    window.dispatchEvent(new CustomEvent("node-change", { detail: { nodeId: id } }));
+  }
 }

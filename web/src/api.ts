@@ -1,4 +1,5 @@
 /** fetch 封装：类型化返回 + 错误归一。 */
+import { S } from "./state";
 import type { Envelope } from "./types";
 
 export class ApiError extends Error {
@@ -9,16 +10,39 @@ export class ApiError extends Error {
   }
 }
 
+export function appendNodeParam(path: string, nodeId: string | null): string {
+  if (!nodeId) return path;
+  const sep = path.includes("?") ? "&" : "?";
+  return path + sep + "node=" + encodeURIComponent(nodeId);
+}
+
 export async function api<T>(path: string, opts?: RequestInit): Promise<T> {
+  const targetPath = appendNodeParam(path, S.nodeId);
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, 15000);
+
   let r: Response;
   try {
-    r = await fetch(path, opts);
-  } catch (e) {
+    const fetchOpts: RequestInit = {
+      ...opts,
+      signal: opts?.signal || controller.signal,
+    };
+    r = await fetch(targetPath, fetchOpts);
+  } catch (e: unknown) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new ApiError("请求超时", 0);
+    }
     throw new ApiError("网络不可达: " + (e instanceof Error ? e.message : String(e)), 0);
+  } finally {
+    clearTimeout(timer);
   }
   if (r.status === 401) {
     // 未授权或 Session 失效：跳转 SSO 登录
-    window.location.href = "/auth/login";
+    if (typeof window !== "undefined" && window.location) {
+      window.location.href = "/auth/login";
+    }
     throw new ApiError("未授权，正在跳转登录...", 401);
   }
   let j: Envelope<T>;

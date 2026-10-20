@@ -26,16 +26,20 @@ function linkCell(r: ServiceRow): string {
   }
   // 2) 探测 url 存在且 Host 是公网域名 → 可点（探测即公网可达）
   if (r.url) {
-    const u = new URL(r.url);
-    if (!isPrivateHost(u.hostname)) {
-      return '<a class="lnk" href="' + esc(r.url) + '" target="_blank" rel="noopener">' +
-        esc(r.url.replace(/^https?:\/\//, "")) + "</a>";
+    try {
+      const u = new URL(r.url);
+      if (!isPrivateHost(u.hostname)) {
+        return '<a class="lnk" href="' + esc(r.url) + '" target="_blank" rel="noopener">' +
+          esc(r.url.replace(/^https?:\/\//, "")) + "</a>";
+      }
+      // 3) 回环/内网地址：不可直达，展示标记
+      const tag = /^127\.|^localhost/.test(u.hostname) ? "本机回环" :
+        (/^100\.64\./.test(u.hostname) ? "Tailscale 内网" : "内网");
+      return ipPort + ' <span class="badge" title="' + esc(r.url) +
+        '">' + tag + "</span>";
+    } catch {
+      return ipPort;
     }
-    // 3) 回环/内网地址：不可直达，展示标记
-    const tag = /^127\.|^localhost/.test(u.hostname) ? "本机回环" :
-      (/^100\.64\./.test(u.hostname) ? "Tailscale 内网" : "内网");
-    return ipPort + ' <span class="badge" title="' + esc(r.url) +
-      '">' + tag + "</span>";
   }
   return ipPort;
 }
