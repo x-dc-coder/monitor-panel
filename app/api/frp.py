@@ -1,6 +1,8 @@
 """GET /api/frp：frps 隧道 + 链路质量（8899 消费）。"""
 from __future__ import annotations
 
+import time
+
 from fastapi import APIRouter
 
 from app import config, constants, db
@@ -16,9 +18,17 @@ async def frp(node: str | None = None):
     tunnels = payload.get("tunnels") or []
     serverinfo = payload.get("serverinfo")
     if not tunnels:
+        # dashboard 无隧道（frpc 全离线）或快照缺失：回退 DB 历史行。
+        # 行可能很旧（frpc 长期离线）——超龄行标 stale，前端按"已断开"呈现，
+        # 避免把 20 天前的状态渲染成在线误导（2026-10-20 面板实录）。
         rows = db.get_tunnels(node)
+        now_ts = time.time()
         tunnels = [
-            {**r, "cur_conns": None, "last_start_time": None} for r in rows]
+            {**r, "cur_conns": None, "last_start_time": None,
+             "updated_ts": r.get("updated_ts"),
+             "status": "stale" if now_ts - (r.get("updated_ts") or 0) > 900
+                       else r.get("status")}
+            for r in rows]
     link = payload.get("link") or {}
     # device_map 反查：8899 device_id → tailscale hostname
     host_by_legacy = {v: k for k, v in config.DEVICE_MAP.items()}

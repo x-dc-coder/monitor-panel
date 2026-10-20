@@ -98,3 +98,39 @@ def test_cleanup_removes_old():
     assert res["alerts"] == 1
     _, _, n = db.query_sample_range("cpu_percent")
     assert n == 1
+
+
+def test_cleanup_prunes_stale_devices():
+    """cleanup 移除 updated_ts 超 7 天的设备残留行（重注册/退网旧行）。"""
+    from app import db as app_db
+    now = time.time()
+    app_db.upsert_devices("cloud-1", [
+        {"device_id": "fresh", "name": "fresh-node", "online": True},
+        {"device_id": "ghost", "name": "ghost-node", "online": False},
+    ])
+    conn = app_db._cursor()
+    with app_db._lock:
+        conn.execute("UPDATE devices SET updated_ts=? WHERE device_id='ghost'",
+                     (now - 8 * 86400,))
+        conn.commit()
+    app_db.cleanup(now)
+    ids = {r["device_id"] for r in app_db.get_devices()}
+    assert "fresh" in ids and "ghost" not in ids
+
+
+def test_cleanup_prunes_stale_devices():
+    """cleanup 移除 updated_ts 超 7 天的设备残留行（重注册/退网旧行）。"""
+    from app import db as app_db
+    now = time.time()
+    app_db.upsert_devices("cloud-1", [
+        {"device_id": "fresh", "name": "fresh-node", "online": True},
+        {"device_id": "ghost", "name": "ghost-node", "online": False},
+    ])
+    conn = app_db._cursor()
+    with app_db._lock:
+        conn.execute("UPDATE devices SET updated_ts=? WHERE device_id='ghost'",
+                     (now - 8 * 86400,))
+        conn.commit()
+    app_db.cleanup(now)
+    ids = {r["device_id"] for r in app_db.get_devices()}
+    assert "fresh" in ids and "ghost" not in ids

@@ -260,6 +260,8 @@ PING_CMD = _env("MONITOR_PING_CMD", "ping")
 # ================= ingest（二期预留，默认 404） =================
 INGEST_ENABLED = _env_bool("MONITOR_INGEST_ENABLED", False)
 INGEST_TOKEN = _env("MONITOR_INGEST_TOKEN", "")
+# 设备表残留清理阈值：连续 N 天未出现在 tailscale status 的行由 cleanup 移除
+DEVICE_RESIDENCE_DAYS = _env_int("MONITOR_DEVICE_RESIDENCE_DAYS", 7)
 
 # ================= SSO (Casdoor OIDC) =================
 SSO_ENABLED = _env_bool("MONITOR_SSO_ENABLED", True)

@@ -240,6 +240,20 @@ def seed_nodes(nodes: list[dict]) -> None:
         conn.commit()
 
 
+def auto_register_node(node_id: str) -> None:
+    """tailnet 成员首次上报时自动登记 monitor_nodes（"入 tailnet 即注册"）。
+
+    设备表已有同名主机（tailscale 采集），此处补 monitor_nodes 行使
+    foot-node/节点切换可见；不覆盖已有行。
+    """
+    conn = _cursor()
+    with _lock:
+        conn.execute(
+            "INSERT OR IGNORE INTO monitor_nodes(id, name, role, public_ip, enabled) "
+            "VALUES (?, ?, 'secondary', NULL, 1)", (node_id, node_id))
+        conn.commit()
+
+
 def touch_node(node_id: str) -> None:
     conn = _cursor()
     with _lock:
@@ -726,18 +740,24 @@ def dedup_unresolved_alerts() -> int:
 
 # ---------------- 清理 ----------------
 def cleanup(now: float | None = None) -> dict:
-    """过期样本/告警清理 + WAL checkpoint（每小时由调度器触发）。"""
+    """过期样本/告警清理 + 设备残留清理 + WAL checkpoint（每小时由调度器触发）。"""
     now = now or time.time()
     conn = _cursor()
     sample_cutoff = now - config.SAMPLE_RETENTION_DAYS * 86400
     alert_cutoff = now - config.ALERT_RETENTION_DAYS * 86400
+    # 设备残留：连续 7 天未出现在 tailscale status 的行（重注册/退网后旧行
+    # 会永久残留并污染设备表——2026-10-20 面板实录 dc-laptop 双行）
+    device_cutoff = now - config.DEVICE_RESIDENCE_DAYS * 86400
     with _lock:
         cur1 = conn.execute("DELETE FROM samples WHERE ts < ?", (sample_cutoff,))
         cur2 = conn.execute("DELETE FROM alerts WHERE ts < ?", (alert_cutoff,))
+        cur3 = conn.execute("DELETE FROM devices WHERE updated_ts < ?", (device_cutoff,))
         conn.commit()
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-    log.info("cleanup: samples=%d alerts=%d", cur1.rowcount, cur2.rowcount)
-    return {"samples": cur1.rowcount, "alerts": cur2.rowcount}
+    log.info("cleanup: samples=%d alerts=%d devices=%d",
+             cur1.rowcount, cur2.rowcount, cur3.rowcount)
+    return {"samples": cur1.rowcount, "alerts": cur2.rowcount,
+            "devices": cur3.rowcount}
 
 
 async def cleanup_async(now: float | None = None) -> dict:

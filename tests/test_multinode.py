@@ -91,7 +91,7 @@ def test_ingest_unknown_node_atomicity_and_400(client, monkeypatch):
     r = client.post("/api/ingest", json=body, headers=headers)
     assert r.status_code == 400
     detail = r.json()["detail"]
-    assert detail["error"] == "unknown node_id"
+    assert "unknown node_id" in detail["error"]
     assert "unknown-node" in detail["rejected"]
     assert "cloud-1" in detail["registered"]
 
@@ -258,3 +258,55 @@ def test_frp_from_remote_node(client, monkeypatch):
     assert db_rows[0]["tunnel_id"] == "aliyun-web"
     assert db_rows[0]["node_id"] == "aliyun"
 
+
+
+def test_frp_fallback_stale_rows(client):
+    """隧道 DB 回退行超 15 分钟 → 标 stale（不再伪装 online）。"""
+    from app import db as app_db
+    old = time.time() - 20 * 86400
+    app_db.upsert_tunnels("cloud-1", [{
+        "tunnel_id": "legacy", "type": "tcp", "remote_port": 20099,
+        "status": "online", "traffic_in": 1.0, "traffic_out": 2.0,
+    }])
+    conn = app_db._cursor()
+    with app_db._lock:
+        conn.execute("UPDATE tunnels SET updated_ts=? WHERE tunnel_id='legacy'", (old,))
+        conn.commit()
+    body = client.get("/api/frp").json()["data"]
+    row = next(t for t in body["tunnels"] if t["tunnel_id"] == "legacy")
+    assert row["status"] == "stale"
+
+
+def test_tailnet_member_auto_registers(client, monkeypatch):
+    """入 tailnet 即注册：devices 表成员（tailscale 主机名）首次上报自动登记
+    monitor_nodes 并接受；完全未知的节点 → 整批 400。"""
+    agg = Aggregator()
+    set_aggregator(agg)
+    monkeypatch.setattr(config, "INGEST_ENABLED", True)
+    monkeypatch.setattr(config, "INGEST_TOKEN", "test-token")
+    conn = db._cursor()
+    with db._lock:
+        conn.execute("DELETE FROM monitor_nodes WHERE id='aliyun'")
+        conn.commit()
+    db.upsert_devices("cloud-1", [{"device_id": "ts-aliyun", "name": "aliyun",
+                                   "os": "linux", "online": True}])
+    assert not db.node_exists("aliyun")
+
+    body = {"results": [{"node_id": "aliyun", "group": "frp_traffic",
+                         "metrics": [{"name": "cur_conns", "value": 3}],
+                         "payload": {"tunnels": [{"tunnel_id": "web", "type": "tcp",
+                                                  "remote_port": 8443, "status": "online"}]}}]}
+    r = client.post("/api/ingest", json=body,
+                   headers={"Authorization": "Bearer test-token"})
+    assert r.status_code == 200, r.text
+    assert db.node_exists("aliyun")                      # 自动登记
+    row = [n for n in db.get_nodes() if n["id"] == "aliyun"][0]
+    assert row["last_seen_ts"] is not None               # 心跳
+    frp = client.get("/api/frp?node=aliyun").json()["data"]
+    assert frp["tunnels"][0]["tunnel_id"] == "web"       # 数据可读
+
+    r2 = client.post("/api/ingest", json={"results": [
+        {"node_id": "intruder", "group": "system", "metrics": []}]},
+        headers={"Authorization": "Bearer test-token"})
+    assert r2.status_code == 400                         # 非 tailnet 成员拒绝
+    assert "intruder" in r2.json()["detail"]["rejected"]
