@@ -98,38 +98,45 @@ Content-Type: application/json
 
 `tests/test_ingest.py`：404（未启用）/ 401（无或错 token）/ 200（正确 token 接受）/ 400（坏 body）。
 
-## 7. aliyun frps 接入（2026-10-20）
+## 7. aliyun frps 接入（2026-10-20，已上线）
 
-针对第二台 frps（node_id="aliyun"，本地 dashboard 运行于 127.0.0.1:7400），部署 stdlib-only 上报 agent（`scripts/ingest_agent.py`）。
+针对第二台 frps（node_id="aliyun"），部署 stdlib-only 上报 agent（`scripts/ingest_agent.py`），
+经 /api/ingest 上报。**节点注册 = 入 tailnet 即注册**（ingest 校验放行 devices 表中的
+tailscale 主机名并自动登记 monitor_nodes），无需改 MONITOR_NODES env。
 
-### 7.1 面板端配置（无任何 nginx 改动）
-1. 确认主节点注册包含 `aliyun`：编辑 `/opt/monitor-panel/env`，设置或更新 `MONITOR_NODES`：
-   ```json
-   MONITOR_NODES=[{"id":"cloud-1","name":"cloud-1","role":"primary","public_ip":"124.221.190.237","enabled":true},{"id":"aliyun","name":"aliyun","role":"secondary","enabled":true}]
+### 7.1 面板端（已完成，2026-10-20 部署）
+- ingest 已启用（Bearer token 见 /opt/monitor-panel/env 的 MONITOR_INGEST_TOKEN）
+- tailnet 自动注册桥已部署：node_id 命中 devices 表主机名即放行并登记
+
+### 7.2 aliyun 节点（已完成，2026-10-20）
+1. tailscale 加入 tailnet（hostname 必须与 agent 的 NODE_ID 一致）：
+   ```bash
+   curl -fsSL https://tailscale.com/install.sh | sh
+   sudo tailscale up --login-server https://headscale.dc-sy.cn \
+     --authkey <headscale preauthkey> --hostname=aliyun
    ```
-2. 确认开启 ingest 并配置 token（若此前未开启）：
-   ```ini
-   MONITOR_INGEST_ENABLED=1
-   MONITOR_INGEST_TOKEN=<hex token>
-   ```
-3. 重启面板：`sudo systemctl restart monitor-panel`
-
-### 7.2 aliyun 节点部署
-1. 安装目录：`/opt/frp-ingest-agent/`
-2. 分发脚本：将仓库的 `scripts/ingest_agent.py` 同步到 `/opt/frp-ingest-agent/ingest_agent.py` 并赋予执行权限。
-3. 配置环境变量文件 `/opt/frp-ingest-agent/env`（`chmod 600`）：
+2. agent：`/opt/frp-ingest-agent/{ingest_agent.py,agent.env}`（env 600）。
+   **注意 `INGEST_URL` 是 base URL（不带 /api/ingest 后缀）**，脚本自行拼接路径：
    ```ini
    INGEST_URL=https://monitor.dc-sy.cn
-   INGEST_TOKEN=<上述生成的 hex token>
+   INGEST_TOKEN=<MONITOR_INGEST_TOKEN 的值>
    NODE_ID=aliyun
    FRPS_URL=http://127.0.0.1:7400
    FRPS_USER=admin
    FRPS_PASS=<aliyun frps dashboard 密码>
-   HTTP_TIMEOUT=10.0
    ```
-4. 定时任务（cron 行，推荐每分钟执行单轮）：
-   ```cron
-   * * * * * set -a; . /opt/frp-ingest-agent/env; set +a; /usr/bin/python3 /opt/frp-ingest-agent/ingest_agent.py --once >> /var/log/frp-ingest-agent.log 2>&1
+3. cron（每分钟，**set -a 导出 env**，否则子进程读不到变量）：
    ```
-   *注：亦可通过 systemd 服务常驻循环运行（去掉 `--once`，默认按 `INGEST_INTERVAL=60` 周期运行）。*
+   * * * * * root set -a; . /opt/frp-ingest-agent/agent.env; set +a; /usr/bin/python3 /opt/frp-ingest-agent/ingest_agent.py --once >> /var/log/frp-ingest-agent.log 2>&1
+   ```
+4. aliyun 本地 frps dashboard 已启用（frps.toml `webServer.addr = "127.0.0.1"`、port 7400
+   ——注意字段名是 **addr** 不是 address，0.63 会拒启；凭据 /root/.frps-dashboard-cred）。
 
+### 7.3 验证
+- agent 日志：`tail /var/log/frp-ingest-agent.log` → 「上报成功 (HTTP 200)」
+- 面板：底栏节点芯片出现 `aliyun`（可点击切换）；`/api/frp?node=aliyun` 返回其隧道
+- 排障：401 `{"ok":false,"error":"unauthorized"}` = 路径拼错（/api/ingest/api/ingest）；
+  400 unknown node = tailnet 主机名与 NODE_ID 不一致。
+
+> 历史注记：2026-10-20 当晚 sso.dc-sy.cn 证书在 19:24→21:24 间被续期
+> （13.1 天 → 35.9 天），nginx 重载后生效；旧证书期间面板告警属预期。
