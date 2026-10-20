@@ -1,3 +1,18 @@
+---
+mdlineage:
+  schema: 1
+  id: monitor-panel.release-monitor
+  kind: spec
+  status: active
+  topics: [releases, grm, integration]
+  created_at: 2026-08-22
+  updated_at: 2026-08-22
+  relations:
+    - type: implements
+      target: monitor-panel.tech-design
+      reason: 落实技术方案"留口子"多源扩展设计，作为首个非监控数据源
+---
+
 # 07 — Release 监控区块（issue #4：grm 只读聚合）
 
 > 建立：2026-08-22（issue 清零批次）。适用范围：`app/collectors/grm.py` / `app/db.py grm_repos` /

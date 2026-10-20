@@ -79,7 +79,7 @@ export function renderServices(): string {
   const head = "服务台账 · 约定区 " + range[0] + "–" + range[1] +
     " · 在线 " + sum.open + "/" + sum.total + " · manual " + sum.manual;
   return pageHead("~/console/services", "服务台账", "端口约定驱动自动发现 · 60s",
-    "docs/05 端口约定：自定义服务统一绑定 " + range[0] + "–" + range[1] + " · 部署即登记 · 表格支持筛选/分页") +
+    "端口约定：自定义服务统一绑定 " + range[0] + "–" + range[1] + " · 部署即登记 · 表格支持筛选/分页") +
     win("已发现服务", head, table(def, svc, TABLE_ID)) +
     '<div class="legend">■ 自动发现约定区端口 · 连续 3 轮未开放置灰 · 公网直达可点，内网/回环仅标记 · ' +
     "按设备/协议/状态筛选，点击聚合标签过滤</div>";

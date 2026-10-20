@@ -1,3 +1,18 @@
+---
+mdlineage:
+  schema: 1
+  id: monitor-panel.cloud2-ingest-runbook
+  kind: guide
+  status: active
+  topics: [ingest, multi-node, runbook]
+  created_at: 2026-08-22
+  updated_at: 2026-08-22
+  relations:
+    - type: depends_on
+      target: monitor-panel.tech-design
+      reason: ingest 上报契约源自技术方案的多节点二期设计
+---
+
 # 08 — cloud-2 接入手册（ingest 上报，issue #5 后续）
 
 > 建立：2026-08-22（issue 清零批次）。前置：issue #5 已落地——nginx 已豁免

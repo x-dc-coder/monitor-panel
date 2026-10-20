@@ -1,0 +1,52 @@
+# MDLineage 治理配置 — monitor-panel 文档契约
+# 校验：mdlineage check .   （门禁基线见 .mdlineage-baseline.json，如存在）
+configVersion: 1
+
+files:
+  include:
+    - 'docs/**/*.md'
+    - 'README.md'
+  exclude:
+    - 'node_modules/**'
+    - 'web/node_modules/**'
+    - '.venv/**'
+
+metadata:
+  required: true
+
+vocabulary:
+  kinds: [architecture, spec, guide, reference, report, plan]
+  statuses: [draft, active, deprecated, archived]
+  authorities: [canonical, supporting]
+
+lifecycle:
+  staleAfterDays: 180
+  staleStatuses: [active]
+  exempt:
+    - 'docs/历史归档/**'
+
+layout:
+  - match: 'docs/架构设计/**'
+    intent:
+      description: 技术方案、模块规范与约定（设计的权威定义）
+      kinds: [architecture, spec]
+  - match: 'docs/质量审查/**'
+    intent:
+      description: 评审、交叉审查与复审报告
+      kinds: [report]
+  - match: 'docs/运维手册/**'
+    intent:
+      description: 设备/服务接入手册与 runbook
+      kinds: [guide, reference]
+  - match: 'docs/调研与规划/**'
+    intent:
+      description: 数据源调研、需求规划与迭代计划
+      kinds: [report, plan]
+  - match: 'docs/历史归档/**'
+    intent:
+      description: 已过时但保留存档的文档
+      kinds: [architecture, spec, guide, reference, report, plan]
+  - match: 'README.md'
+    intent:
+      description: 仓库主指引（开发工作区入口）
+      kinds: [reference]

@@ -25,7 +25,7 @@ _TITLE_RE = re.compile(r"(?is)<title[^>]*>(.*?)</title>")
 _SERVER_RE = re.compile(r"(?im)^server:\s*(.+)$")
 _STATUS_RE = re.compile(r"HTTP/\d\.\d\s+(\d{3})")
 
-# mock 确定性服务样例（对齐 docs/05 端口约定示例）
+# mock 确定性服务样例（对齐 docs/架构设计/服务台账与端口约定.md 示例）
 _MOCK_SERVICES = [
     {"device_id": "local", "device_name": "localhost", "tailscale_ip": "127.0.0.1",
      "port": 10000, "protocol": "http", "auto_name": "本地服务预览", "http_status": 200,

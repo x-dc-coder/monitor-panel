@@ -1,7 +1,23 @@
+---
+mdlineage:
+  schema: 1
+  id: monitor-panel.readme
+  kind: reference
+  status: active
+  authority: canonical
+  topics: [readme, handbook]
+  created_at: 2026-08-15
+  updated_at: 2026-10-20
+  relations:
+    - type: related_to
+      target: monitor-panel.tech-design
+      reason: 主指引引用技术方案作为详细设计的权威来源
+---
+
 # monitor.dc-sy.cn 统一监控面板 — 开发计划与任务书
 
 > 版本：v1.3.1 ｜ 更新：2026-08-24 ｜ 状态：**M1–M5 完成 + issue 清零 + 一周运行审查修复，线上运行中（release 20260824-083139 / VERSION 1.3.0）**
-> 本文档是开发工作区的主指引；详细设计见 docs/ 下八份报告。
+> 本文档是开发工作区的主指引；详细设计见 docs/ 四类目录（mdlineage 治理，契约见 `mdlineage.config.yaml`）。
 
 ## 开发状态（2026-08-24 更新）
 
@@ -28,8 +44,8 @@
 - 线上验证：当时 pytest 57 / npm 6（现 65，见上方审查批次）✓ / 10 视图 0 console error ✓ / 390px+768px 0 横向溢出 ✓ / Playwright 截图核验 ✓
 
 **二期增强（2026-08-17）**：
-- 服务台账（issue #2）：约定区自动发现 + 探活 + 域名探测 + 直达分级 + 下线告警（docs/05）
-- 通用 DataTable 组件：分页/筛选/聚合，服务/告警/设备三视图复用（docs/06）
+- 服务台账（issue #2）：约定区自动发现 + 探活 + 域名探测 + 直达分级 + 下线告警（docs/架构设计/服务台账与端口约定.md）
+- 通用 DataTable 组件：分页/筛选/聚合，服务/告警/设备三视图复用（docs/架构设计/前端表格组件规范.md）
 - 技术栈审查整改：面板 Basic Auth、前端 node 单测、GitHub Actions CI、移除 ECharts 死重
 
 **本地开发**：
@@ -110,12 +126,12 @@ monitor-panel/
 │       ├── services.py    # GET /api/services（服务台账）
 │       ├── schemas.py     # openapi schema 模型（issue #6：gen:types 管线数据源）
 │       └── ingest.py      # POST /api/ingest（cloud-2 上报；nginx 已豁免 Basic Auth，
-│       │                  #   应用层 Bearer token；INGEST_ENABLED=0 时 404，docs/08）
+│       │                  #   应用层 Bearer token；INGEST_ENABLED=0 时 404，docs/运维手册/cloud2-ingest-runbook.md）
 ├── web/
 │   ├── index.html         # 单页面板（顶部状态条 + 卡片 + 表格 + 趋势图区）
 │   ├── src/               # TypeScript 源码（esbuild 打包 → dist/app.js）
 │   │   ├── main.ts        # 入口：hash 路由 + 轮询调度 + 视图装配
-│   │   ├── table.ts       # 通用 DataTable：分页/筛选/聚合/次要列 sec（docs/06）
+│   │   ├── table.ts       # 通用 DataTable：分页/筛选/聚合/次要列 sec（docs/架构设计/前端表格组件规范.md）
 │   │   ├── ui.ts          # 组件库：win/tb/st/statusLevel/esc
 │   │   ├── state.ts       # 轮询结果缓存（视图读取，切换视图立即刷新）
 │   │   ├── api.ts / fmt.ts / ascii.ts / types.ts
@@ -141,7 +157,7 @@ monitor-panel/
 ├── requirements.txt       # fastapi uvicorn httpx psutil
 ├── monitor-panel.service  # systemd 模板（127.0.0.1:8898）
 ├── README.md
-└── docs/                  # 本目录（方案/调研/评审/手册/约定/runbook 八份报告）
+└── docs/                  # mdlineage 四骨架：架构设计/调研与规划/质量审查/运维手册
 ```
 
 ## 2. 开发顺序（里程碑）
@@ -181,7 +197,7 @@ grm_repos(id, node_id, repo_id, url, owner_slug, display_name,   -- Release 监�
 > 服务台账机制：自定义项目/网站统一绑定约定区（默认 10000–19999），面板自动扫描
 > 发现 + 探活；区间外固定端口走 manual 登记。**行生命周期（2026-08-24）**：auto 行
 > closed 距 last_seen 超 `SERVICES_PRUNE_CLOSED_S`（默认 1h）或脱离 extra 配置即
-> 删除并 resolve 告警；manual 行永不删。详见 `docs/05-服务台账与端口约定.md`。
+> 删除并 resolve 告警；manual 行永不删。详见 `docs/架构设计/服务台账与端口约定.md`。
 
 ### 3.2 API（统一 `{ok, data, ts}`；公网经 nginx Basic Auth 保护）
 
@@ -197,7 +213,7 @@ grm_repos(id, node_id, repo_id, url, owner_slug, display_name,   -- Release 监�
 | GET /api/history?metric=&range=&bucket= | 趋势降采样 |
 | GET /api/healthz | 探活 + mode + 采集器统计（本机直连 127.0.0.1，nginx 认证不涉及） |
 | POST /api/ingest | cloud-2 agent 上报（nginx 已豁免 Basic Auth；应用层 Bearer token；
-  `INGEST_ENABLED=0` 时 404 不可发现，接入步骤见 docs/08） |
+  `INGEST_ENABLED=0` 时 404 不可发现，接入步骤见 docs/运维手册/cloud2-ingest-runbook.md） |
 
 > 公网访问 `https://monitor.dc-sy.cn` 需 Basic Auth（凭据文件 /etc/nginx/.htpasswd.monitor；
 > ACME 挑战与 `/api/ingest` 已豁免认证——后者防护在应用层 token）。本机 127.0.0.1:8898
@@ -265,16 +281,20 @@ env 文件加载顺序（`app/config.py`，`setdefault` 语义——已存在的
 
 ## 6. 参考文档（docs/）
 
-| 文件 | 内容 |
-|---|---|
-| `01-技术方案-v1.1.md` | 完整技术方案（架构/功能/API/数据模型/部署/扩展/风险，514 行） |
-| `02-数据源调研报告.md` | 数据源实测（frp 面板资产、tailscale/headscale 字段、采集频率、多云结论） |
-| `03-评审与复审报告.md` | t3 评审（阻塞项+修正项）与 t5 复审（通过+N1 修正） |
-| `04-设备接入手册.md` | 设备接入（阿里云/树莓派/子网路由/扩展预留） |
-| `05-服务台账与端口约定.md` | 服务台账机制（端口分区约定/自动发现/域名探测） |
-| `06-前端表格组件规范.md` | DataTable 通用组件（接入教程/规则/踩坑记录） |
-| `07-release-monitor.md` | Release 监控区块（grm 只读聚合：数据契约/降级语义/fork 扩展联动/排障） |
-| `08-cloud2-ingest-runbook.md` | cloud-2 接入手册（ingest 启用步骤/上报契约/token 轮换） |
+docs/ 按 mdlineage 治理（front matter 契约 + 目录意图契约，`mdlineage check .` 校验）：
+
+| 目录 | 文件 | 内容 |
+|---|---|---|
+| 架构设计/ | `技术方案.md` | 完整技术方案（架构/功能/API/数据模型/部署/扩展/风险） |
+| 架构设计/ | `服务台账与端口约定.md` | 服务台账机制（端口分区约定/自动发现/域名探测） |
+| 架构设计/ | `前端表格组件规范.md` | DataTable 通用组件（接入教程/规则/踩坑记录） |
+| 架构设计/ | `release-monitor.md` | Release 监控区块（grm 只读聚合：契约/降级/排障） |
+| 调研与规划/ | `数据源调研报告.md` | 数据源实测（frp 资产、tailscale/headscale 字段、多云结论） |
+| 质量审查/ | `评审与复审报告.md` | t3 评审（阻塞项+修正项）与 t5 复审（通过+N1 修正） |
+| 质量审查/ | `交叉审查报告-2026-10-20.md` | glm5.3+atria 双模型代码交叉审查（1 P0 + 8 P1 + 13 P2，含 PoC） |
+| 质量审查/ | `架构需求审查-2026-10-20.md` | glm5.3+atria 需求→架构符合度审查（三档调整建议 + 触发条件） |
+| 运维手册/ | `设备接入手册.md` | 设备接入（阿里云/树莓派/子网路由/扩展预留） |
+| 运维手册/ | `cloud2-ingest-runbook.md` | cloud-2 接入手册（ingest 启用步骤/上报契约/token 轮换） |
 
 ## 7. 开发完成后交接
 

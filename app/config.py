@@ -175,7 +175,7 @@ GRM_BASE_URL = _env("MONITOR_GRM_BASE_URL", "https://releases.monitor.dc-sy.cn")
 UPDATE_PROVIDERS = _env_json("MONITOR_UPDATE_PROVIDERS", ["grm"])
 
 # ================= 服务台账（issue #2：端口约定驱动自动发现） =================
-# 约定区：自定义项目/网站统一绑定 [lo, hi] 内端口（文档 docs/05-服务台账与端口约定.md），
+# 约定区：自定义项目/网站统一绑定 [lo, hi] 内端口（文档 docs/架构设计/服务台账与端口约定.md），
 # 面板自动扫描该区间完成服务发现 + 探活；区间外固定端口走 manual 登记（db source=manual）。
 SERVICES_PORT_RANGE = _env_json("MONITOR_SERVICES_PORT_RANGE", [10000, 19999])
 SERVICES_ALIASES = _env_json("MONITOR_SERVICES_ALIASES", {      # {"ip:port": "显示名"}
@@ -190,7 +190,7 @@ SERVICES_ALIASES = _env_json("MONITOR_SERVICES_ALIASES", {      # {"ip:port": "�
 #   host=Host 头/SNI 域名（nginx 虚拟主机按域名路由，IP 探测会 404）；https=TLS 探测；
 #   path=请求路径（如 /metrics）；"*"=所有设备，"local"=本机 127.0.0.1
 SERVICES_EXTRA_PORTS = _env_json("MONITOR_SERVICES_EXTRA_PORTS", {
-    # 云上核心服务（docs/05 台账：约定区外固定端口，local=本机 127.0.0.1）
+    # 云上核心服务（docs/架构设计/服务台账与端口约定.md 台账：约定区外固定端口，local=本机 127.0.0.1）
     "local": [8000, 8787, 5212, 9000, 5432],
 })
 # 服务公网直达地址：{"ip:port": "https://..."}，面板链接用它；未配置的内网/回环地址仅展示标记
