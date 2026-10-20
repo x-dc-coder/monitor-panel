@@ -266,7 +266,9 @@ SSO_ENABLED = _env_bool("MONITOR_SSO_ENABLED", True)
 CASDOOR_CLIENT_ID = _env("CASDOOR_CLIENT_ID", "")
 CASDOOR_CLIENT_SECRET = _env("CASDOOR_CLIENT_SECRET", "")
 CASDOOR_ISSUER = _env("CASDOOR_ISSUER", "https://sso.dc-sy.cn").rstrip("/")
-SESSION_SECRET_KEY = _env("MONITOR_SESSION_SECRET", "monitor-panel-session-secret-key-change-me")
+# 会话 cookie 签名密钥：模块默认值仅本地开发可用，live 模式启动校验拒绝默认值
+_DEFAULT_SESSION_SECRET = "monitor-panel-session-secret-key-change-me"
+SESSION_SECRET_KEY = _env("MONITOR_SESSION_SECRET", _DEFAULT_SESSION_SECRET)
 
 # ================= 静态资源 =================
 WEB_DIR = BASE_DIR / "web"
@@ -289,6 +291,21 @@ def validate_config() -> list[str]:
         errors.append("MONITOR_FRPS_PASS 未设置（frps dashboard 密码，live 模式必需）")
     if not LEGACY_TOKEN:
         errors.append("MONITOR_LEGACY_TOKEN 未设置（8899 面板 API token，live 模式必需）")
+    # SSO 启用时会话 cookie 可被默认密钥伪造 → 默认值/过短密钥一律拒启
+    if SSO_ENABLED and CASDOOR_CLIENT_ID:
+        if SESSION_SECRET_KEY == _DEFAULT_SESSION_SECRET:
+            errors.append(
+                "MONITOR_SESSION_SECRET 未设置或仍为默认值"
+                "（可伪造会话 cookie，live 模式必需）")
+        if len(SESSION_SECRET_KEY) < 32:
+            errors.append(
+                "MONITOR_SESSION_SECRET 长度不足 32 字符"
+                "（建议 openssl rand -hex 32 生成）")
+    # 启用上报接口却无 token 时，空 Bearer 可绕过认证
+    if INGEST_ENABLED and not INGEST_TOKEN:
+        errors.append(
+            "MONITOR_INGEST_TOKEN 未设置"
+            "（INGEST_ENABLED=1 时必需，建议 ≥24 字符）")
     return errors
 
 

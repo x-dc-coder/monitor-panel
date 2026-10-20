@@ -31,6 +31,10 @@ log = logging.getLogger(__name__)
 
 _started = time.time()
 
+# 未认证可读的静态产物清单（精确匹配，对应 web/index.html 的 <link>/<script> 引用）；
+# 新增静态资产须在此显式登记，后缀式放行会让未认证者读到任意脚本/映射文件
+PUBLIC_ASSETS = frozenset({"/dist/app.js", "/style.css", "/favicon.svg"})
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -101,14 +105,12 @@ async def auth_guard_middleware(request: Request, call_next):
     # 1. 认证路由自身：/auth/*
     # 2. 健康检查：/api/healthz（deploy.sh 健康检查强依赖）
     # 3. 监控指标上报：/api/ingest（dc-desktop 等 agent 走独立 Bearer token 校验）
-    # 4. 静态资源：收紧为面板实际产出的清单（Phase 4）——任意路径 .js/.css
-    #    后缀放行会让未认证者读到 web/dist 下任意脚本
+    # 4. 静态资源：精确产物清单 PUBLIC_ASSETS（新增静态资产须显式登记）
     if (
         path.startswith("/auth/")
         or path == "/api/healthz"
         or path == "/api/ingest"
-        or path in ("/app.js", "/style.css", "/favicon.svg")
-        or path.endswith((".js", ".css", ".png", ".jpg", ".svg", ".ico", ".woff", ".woff2", ".map"))
+        or path in PUBLIC_ASSETS
     ):
         return await call_next(request)
 
