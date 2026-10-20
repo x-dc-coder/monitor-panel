@@ -181,3 +181,80 @@ def test_api_system_restart_fallback(client):
     data = r.json()["data"]
     assert data["cpu_percent"] == 33.3
     assert data["mem_percent"] == 55.5
+
+
+def test_frp_from_remote_node(client, monkeypatch):
+    """seed/注册 aliyun 节点 → 经 agg.ingest 一个 node_id=aliyun、group=frp_traffic、payload 含 tunnels 的 result
+    → 断言 /api/frp?node=aliyun 返回其 tunnels、/api/frp 缺省仍本机、db.tunnels 该 node 行存在。
+    """
+    agg = Aggregator()
+    set_aggregator(agg)
+
+    # 1. seed / 注册 aliyun 节点
+    db.seed_nodes([{"id": "aliyun", "name": "aliyun", "role": "secondary"}])
+    nodes = [n["id"] for n in db.get_nodes()]
+    assert "aliyun" in nodes
+
+    ts = time.time()
+    aliyun_tunnels = [
+        {
+            "tunnel_id": "aliyun-web",
+            "type": "tcp",
+            "remote_port": 18080,
+            "local_addr": "127.0.0.1:8080",
+            "status": "online",
+            "traffic_in": 1000,
+            "traffic_out": 2000,
+        }
+    ]
+
+    # 本机 cloud-1 也灌入一条区分
+    r_local = CollectorResult(node_id="cloud-1", group=constants.GROUP_FRP_TRAFFIC)
+    r_local.payload = {
+        "source": "frps-dashboard",
+        "ts": ts,
+        "tunnels": [
+            {
+                "tunnel_id": "local-ssh",
+                "type": "tcp",
+                "remote_port": 2222,
+                "local_addr": "127.0.0.1:22",
+                "status": "online",
+                "traffic_in": 300,
+                "traffic_out": 400,
+            }
+        ],
+    }
+
+    r_aliyun = CollectorResult(node_id="aliyun", group=constants.GROUP_FRP_TRAFFIC)
+    r_aliyun.payload = {
+        "source": "frps-dashboard",
+        "ts": ts,
+        "tunnels": aliyun_tunnels,
+    }
+
+    agg._ingest_blocking(r_local, ts)
+    agg._ingest_blocking(r_aliyun, ts)
+
+    # 2. 断言 /api/frp 缺省仍本机 (cloud-1)
+    r_def = client.get("/api/frp")
+    assert r_def.status_code == 200
+    tunnels_def = r_def.json()["data"]["tunnels"]
+    assert len(tunnels_def) == 1
+    assert tunnels_def[0]["tunnel_id"] == "local-ssh"
+
+    # 3. 断言 /api/frp?node=aliyun 返回其 tunnels
+    r_remote = client.get("/api/frp", params={"node": "aliyun"})
+    assert r_remote.status_code == 200
+    tunnels_remote = r_remote.json()["data"]["tunnels"]
+    assert len(tunnels_remote) == 1
+    assert tunnels_remote[0]["tunnel_id"] == "aliyun-web"
+    assert tunnels_remote[0]["remote_port"] == 18080
+    assert tunnels_remote[0]["status"] == "online"
+
+    # 4. 断言 db.tunnels 该 node 行存在
+    db_rows = db.get_tunnels("aliyun")
+    assert len(db_rows) == 1
+    assert db_rows[0]["tunnel_id"] == "aliyun-web"
+    assert db_rows[0]["node_id"] == "aliyun"
+

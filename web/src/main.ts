@@ -3,7 +3,7 @@
  * 轮询节奏：overview 5s / devices+frp+alerts 10s / certs+probes+healthz 30s / spark 30s
  */
 import { api } from "./api";
-import { S, setCur } from "./state";
+import { S, setCur, setNode } from "./state";
 import type {
   AlertsData, CertsData, DevicesData, FrpData, GrmData, HealthzData,
   HistoryData, NetworkData, OverviewData, ServicesData, UpdatesData,
@@ -48,14 +48,32 @@ function renderStatusbar(): void {
   if (footNodeEl) {
     if (o.nodes && o.nodes.length > 0) {
       const now = Date.now() / 1000;
+      // 判定有效主节点 ID
+      const primaryNode = o.nodes.find((n) => n.role === "primary") || o.nodes[0];
       footNodeEl.innerHTML = o.nodes.map((node) => {
         const isStale = node.last_seen_ts != null && (now - node.last_seen_ts > 300);
+        const isActive = (S.nodeId === null && (primaryNode ? node.id === primaryNode.id : false)) || (S.nodeId === node.id);
         const titleAttr = node.last_seen_ts != null
           ? ' title="last_seen: ' + fmtTs(node.last_seen_ts) + '"'
           : "";
-        const cls = "node-chip" + (isStale ? " stale" : "");
-        return '<span class="' + cls + '"' + titleAttr + ">" + esc(node.id) + "</span>";
+        const cls = "node-chip" + (isActive ? " active" : "") + (isStale ? " stale" : "");
+        return '<span class="' + cls + '" data-node="' + esc(node.id) + '"' + titleAttr + ">" + esc(node.id) + "</span>";
       }).join("");
+
+      // 绑定节点点击切换器
+      footNodeEl.querySelectorAll<HTMLSpanElement>(".node-chip").forEach((chip) => {
+        chip.onclick = (): void => {
+          const targetNode = chip.getAttribute("data-node");
+          if (!targetNode) return;
+          // 点击当前选中则切回缺省/主节点或指定节点
+          if (S.nodeId === targetNode) return;
+          if (primaryNode && targetNode === primaryNode.id) {
+            setNode(null);
+          } else {
+            setNode(targetNode);
+          }
+        };
+      });
     } else {
       footNodeEl.textContent = "—";
     }
@@ -181,8 +199,19 @@ function render(): void {
 // 表格内交互（筛选/分页/分组）触发重渲染
 document.addEventListener("table-change", () => render());
 
-// 节点切换接缝：监听 node-change 立即触发一轮 pollOverview
-window.addEventListener("node-change", () => void pollOverview());
+// 节点切换接缝：监听 node-change 立即触发全部 poll 刷新
+window.addEventListener("node-change", () => {
+  void pollOverview();
+  void pollDevices();
+  void pollFrp();
+  void pollCerts();
+  void pollProbes();
+  void pollServices();
+  void pollReleases();
+  void pollAlerts();
+  void pollHealthz();
+  void refreshSpark();
+});
 
 window.addEventListener("hashchange", render);
 

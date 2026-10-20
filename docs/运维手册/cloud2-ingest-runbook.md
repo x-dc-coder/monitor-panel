@@ -97,3 +97,39 @@ Content-Type: application/json
 ## 6. 测试
 
 `tests/test_ingest.py`：404（未启用）/ 401（无或错 token）/ 200（正确 token 接受）/ 400（坏 body）。
+
+## 7. aliyun frps 接入（2026-10-20）
+
+针对第二台 frps（node_id="aliyun"，本地 dashboard 运行于 127.0.0.1:7400），部署 stdlib-only 上报 agent（`scripts/ingest_agent.py`）。
+
+### 7.1 面板端配置（无任何 nginx 改动）
+1. 确认主节点注册包含 `aliyun`：编辑 `/opt/monitor-panel/env`，设置或更新 `MONITOR_NODES`：
+   ```json
+   MONITOR_NODES=[{"id":"cloud-1","name":"cloud-1","role":"primary","public_ip":"124.221.190.237","enabled":true},{"id":"aliyun","name":"aliyun","role":"secondary","enabled":true}]
+   ```
+2. 确认开启 ingest 并配置 token（若此前未开启）：
+   ```ini
+   MONITOR_INGEST_ENABLED=1
+   MONITOR_INGEST_TOKEN=<hex token>
+   ```
+3. 重启面板：`sudo systemctl restart monitor-panel`
+
+### 7.2 aliyun 节点部署
+1. 安装目录：`/opt/frp-ingest-agent/`
+2. 分发脚本：将仓库的 `scripts/ingest_agent.py` 同步到 `/opt/frp-ingest-agent/ingest_agent.py` 并赋予执行权限。
+3. 配置环境变量文件 `/opt/frp-ingest-agent/env`（`chmod 600`）：
+   ```ini
+   INGEST_URL=https://monitor.dc-sy.cn
+   INGEST_TOKEN=<上述生成的 hex token>
+   NODE_ID=aliyun
+   FRPS_URL=http://127.0.0.1:7400
+   FRPS_USER=admin
+   FRPS_PASS=<aliyun frps dashboard 密码>
+   HTTP_TIMEOUT=10.0
+   ```
+4. 定时任务（cron 行，推荐每分钟执行单轮）：
+   ```cron
+   * * * * * set -a; . /opt/frp-ingest-agent/env; set +a; /usr/bin/python3 /opt/frp-ingest-agent/ingest_agent.py --once >> /var/log/frp-ingest-agent.log 2>&1
+   ```
+   *注：亦可通过 systemd 服务常驻循环运行（去掉 `--once`，默认按 `INGEST_INTERVAL=60` 周期运行）。*
+

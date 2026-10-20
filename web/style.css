@@ -68,7 +68,9 @@ button{font-family:inherit;color:inherit;background:none;border:none;cursor:poin
 .statusbar .right{margin-left:auto;display:flex}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 
-.node-chip{margin-right:6px}
+.node-chip{margin-right:6px;cursor:pointer;padding:1px 5px;border-radius:2px;user-select:none;transition:background .15s,color .15s}
+.node-chip:hover{background:var(--bg3);color:var(--cy)}
+.node-chip.active{background:var(--cyglow);color:var(--cy);border:1px solid var(--cy)}
 .node-chip.stale{color:var(--warn)}
 
 /* ================= 视图通用 ================= */
