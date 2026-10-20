@@ -52,40 +52,48 @@ async def ingest(body: dict):
     if not isinstance(results, list):
         raise HTTPException(status_code=400, detail="expected {results: [...]}")
 
-    # 批前校验：校验任一 item 的 node_id 是否已注册
+    # 批前校验：注册语义 = "入 tailnet 即注册"——node_id 命中 monitor_nodes
+    # （env 种子/历史登记）或 devices 表（tailscale 采集的 tailnet 主机名）
+    # 任一即可；tailnet 成员首次上报自动登记 monitor_nodes（foot-node/节点
+    # 切换随之可见）。两者皆未命中 → 整批 400。
     unknown_nodes: set[str] = set()
     valid_items: list[dict] = []
+    known_ids = {n["id"] for n in db.get_nodes()}
+    known_names = {d["name"] for d in db.get_devices()}
     for item in results:
         if not isinstance(item, dict) or "node_id" not in item or "group" not in item:
             continue
-        nid = item["node_id"]
-        if not db.node_exists(nid):
+        nid = str(item["node_id"])
+        if nid not in known_ids and nid not in known_names:
             unknown_nodes.add(nid)
         else:
             valid_items.append(item)
 
     if unknown_nodes:
-        registered_nodes = [n["id"] for n in db.get_nodes()]
         raise HTTPException(
             status_code=400,
             detail={
-                "error": "unknown node_id",
+                "error": "unknown node_id（未注册：加入 tailnet 或登记 MONITOR_NODES）",
                 "rejected": sorted(unknown_nodes),
-                "registered": registered_nodes,
+                "registered": sorted(known_ids),
             },
         )
 
     n = 0
     for item in valid_items:
         from app.collectors.base import CollectorResult, Metric
-        r = CollectorResult(node_id=item["node_id"], group=item["group"])
+        node_id = str(item["node_id"])
+        if node_id not in known_ids:
+            # tailnet 成员首次上报 → 自动登记（下次轮询 foot-node 即可见）
+            db.auto_register_node(node_id)
+        r = CollectorResult(node_id=node_id, group=item["group"])
         for m in item.get("metrics", []):
             r.add(m["name"], m["value"], m.get("ts"))
         if item.get("payload"):
             r.payload = item["payload"]
         await agg.ingest(r)
         # 聚合成功后刷新心跳：失败不得谎报节点在线
-        db.touch_node(item["node_id"])
+        db.touch_node(node_id)
         n += 1
     log.info("ingest: %d result(s) from remote node", n)
     return ok({"accepted": n})
