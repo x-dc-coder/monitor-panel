@@ -90,10 +90,10 @@ def test_ingest_unknown_node_atomicity_and_400(client, monkeypatch):
 
     r = client.post("/api/ingest", json=body, headers=headers)
     assert r.status_code == 400
-    detail = r.json()["detail"]
-    assert "unknown node_id" in detail["error"]
-    assert "unknown-node" in detail["rejected"]
-    assert "cloud-1" in detail["registered"]
+    detail = r.json()["error"]
+    assert "unknown node_id" in detail
+    assert "unknown-node" in detail
+    assert "cloud-1" in detail
 
     # 原子性：混合批被拒绝，cloud-1 的 sample 也不应写入
     _, _, count = db.query_sample_range("cpu_percent")
@@ -309,4 +309,46 @@ def test_tailnet_member_auto_registers(client, monkeypatch):
         {"node_id": "intruder", "group": "system", "metrics": []}]},
         headers={"Authorization": "Bearer test-token"})
     assert r2.status_code == 400                         # 非 tailnet 成员拒绝
-    assert "intruder" in r2.json()["detail"]["rejected"]
+    assert "intruder" in r2.json()["error"]
+
+
+def test_grm_node_filter(client):
+    """?node= 过滤 grm_repos；缺省只返回本机（cloud-1）。"""
+    conn = db._cursor()
+    with db._lock:
+        conn.execute("DELETE FROM grm_repos")
+        conn.commit()
+    db.upsert_grm_repos("cloud-1", [{"repo_id": "local/repo", "url": "https://x/1"}])
+    db.upsert_grm_repos("aliyun", [{"repo_id": "remote/repo", "url": "https://x/2"}])
+
+    r = client.get("/api/grm")
+    assert r.status_code == 200
+    ids = {x["repo_id"] for x in r.json()["data"]["repos"]}
+    assert ids == {"local/repo"}
+
+    r = client.get("/api/grm", params={"node": "aliyun"})
+    assert r.status_code == 200
+    ids = {x["repo_id"] for x in r.json()["data"]["repos"]}
+    assert ids == {"remote/repo"}
+
+
+def test_services_node_filter(client):
+    """?node= 过滤 services；缺省只返回本机（cloud-1）。"""
+    conn = db._cursor()
+    with db._lock:
+        conn.execute("DELETE FROM services")
+        conn.commit()
+    db.upsert_services("cloud-1", [{"device_id": "ts-local", "port": 8080,
+                                    "status": "open"}])
+    db.upsert_services("aliyun", [{"device_id": "ts-aliyun", "port": 9090,
+                                   "status": "open"}])
+
+    r = client.get("/api/services")
+    assert r.status_code == 200
+    keys = {(x["device_id"], x["port"]) for x in r.json()["data"]["services"]}
+    assert keys == {("ts-local", 8080)}
+
+    r = client.get("/api/services", params={"node": "aliyun"})
+    assert r.status_code == 200
+    keys = {(x["device_id"], x["port"]) for x in r.json()["data"]["services"]}
+    assert keys == {("ts-aliyun", 9090)}

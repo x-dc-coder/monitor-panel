@@ -11,7 +11,8 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
@@ -117,10 +118,32 @@ async def auth_guard_middleware(request: Request, call_next):
     user = request.session.get("user")
     if not user:
         if path.startswith("/api/"):
-            return JSONResponse(status_code=401, content={"ok": False, "error": "unauthorized"})
+            return JSONResponse(
+                status_code=401,
+                content={"ok": False, "error": "unauthorized", "ts": time.time()})
         return RedirectResponse(url="/auth/login")
 
     return await call_next(request)
+
+
+@app.exception_handler(HTTPException)
+async def _http_exc_handler(request: Request, exc: HTTPException):
+    """统一错误信封 {ok:false, error:<str>, ts}（状态码沿用 exc.status_code）。"""
+    detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"ok": False, "error": detail, "ts": time.time()},
+        headers=getattr(exc, "headers", None) or None)
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_handler(request: Request, exc: RequestValidationError):
+    first = exc.errors()[0] if exc.errors() else {}
+    loc = ".".join(str(x) for x in first.get("loc", []))
+    msg = f"参数校验失败: {loc}: {first.get('msg', '')}".strip()
+    return JSONResponse(
+        status_code=422,
+        content={"ok": False, "error": msg, "ts": time.time()})
 
 
 # Session 中间件（包裹在最外层，确保 auth_guard_middleware 可以读取 request.session）

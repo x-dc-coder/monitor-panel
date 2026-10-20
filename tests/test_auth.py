@@ -34,8 +34,8 @@ def test_sso_bypass_when_not_configured(client):
     assert r.json()["ok"] is True
 
     r = client.get("/api/me")
-    assert r.status_code == 200
-    assert r.json()["ok"] is False  # 无 user session 但请求不被 401 拦截
+    assert r.status_code == 401  # 未登录：统一错误信封（SSO 旁路不影响 /api/me 自身鉴权）
+    assert r.json()["ok"] is False
 
 
 def test_sso_whitelist_endpoints(client, monkeypatch):
@@ -66,6 +66,7 @@ def test_sso_guard_intercepts_unauthenticated(client, monkeypatch):
     r = client.get("/api/overview")
     assert r.status_code == 401
     assert r.json()["error"] == "unauthorized"
+    assert isinstance(r.json()["ts"], float)
 
     # 页面请求拦截为重定向至 /auth/login
     r = client.get("/", follow_redirects=False)
@@ -127,6 +128,7 @@ def test_forged_default_secret_cookie_rejected(client, monkeypatch):
                    headers={"Cookie": f"monitor_session={forged}"})
     assert r.status_code == 401
     assert r.json()["error"] == "unauthorized"
+    assert isinstance(r.json()["ts"], float)
 
 
 def test_suffix_bypass_rejected(client, monkeypatch):
@@ -137,6 +139,7 @@ def test_suffix_bypass_rejected(client, monkeypatch):
     r = client.get("/api/foo.js", follow_redirects=False)
     assert r.status_code == 401
     assert r.json()["error"] == "unauthorized"
+    assert isinstance(r.json()["ts"], float)
 
     # web/index.html 引用的实际产物（web/dist/app.js、style.css、favicon.svg）
     for asset in ("/dist/app.js", "/style.css", "/favicon.svg"):

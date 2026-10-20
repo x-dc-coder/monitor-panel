@@ -32,7 +32,7 @@ def test_enabled_wrong_token_returns_401(client, monkeypatch):
     monkeypatch.setattr(config, "INGEST_TOKEN", "secret-token")
     r = _post(client, body={"results": []}, token="wrong-token")
     assert r.status_code == 401
-    assert "invalid token" in r.json()["detail"]
+    assert "invalid token" in r.json()["error"]
 
 
 def test_enabled_correct_token_accepts(client, monkeypatch):
@@ -64,11 +64,11 @@ def test_ingest_empty_token_bearer_rejected(client, monkeypatch):
 
     r = _post(client, body={"results": []}, token="")
     assert r.status_code == 401
-    assert "not configured" in r.json()["detail"]
+    assert "not configured" in r.json()["error"]
 
     r = _post(client, body={"results": []})
     assert r.status_code == 401
-    assert "not configured" in r.json()["detail"]
+    assert "not configured" in r.json()["error"]
 
 
 def test_validate_config_ingest_requires_token(monkeypatch):

@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException
 
 from app import config, constants, db
 from app.api import get_aggregator, ok
+from app.api.schemas import DevicesEnvelope, PingEnvelope
 from app.collectors import get as get_collector
 from app.collectors.base import CollectorError, validate_ip_or_host
 
@@ -31,7 +32,8 @@ def _remember_manual_ping(device_id: str, now: float) -> None:
         del _last_manual_ping[k]
 
 
-@router.get("/devices")
+@router.get("/devices", responses={200: {"model": DevicesEnvelope,
+                                         "description": "设备清单"}})
 async def devices(node: str | None = None):
     agg = get_aggregator()
     ts_p = agg.latest_for(constants.GROUP_TS_LATENCY, node)
@@ -96,7 +98,9 @@ async def devices(node: str | None = None):
     return ok({"devices": out, "device_map": config.DEVICE_MAP})
 
 
-@router.post("/devices/{device_id}/ping")
+@router.post("/devices/{device_id}/ping",
+             responses={200: {"model": PingEnvelope,
+                             "description": "手动 ping 结果"}})
 async def ping_device(device_id: str):
     # 限流 5s/设备（评审 E8）
     now = time.monotonic()
@@ -118,9 +122,11 @@ async def ping_device(device_id: str):
         seed = int(hashlib.md5(device_id.encode()).hexdigest()[:6], 16)
         latency = 15 + seed % 80
         _remember_manual_ping(device_id, now)
-        return ok({"device_id": device_id, "tailscale_ip": ip,
-                   "latency_ms": float(latency), "path": "derp",
-                   "loss_percent": 0.0, "timed_out": False, "mock": True})
+        return ok({"device_id": device_id, "hostname": dev.get("name"),
+                   "tailscale_ip": ip, "latency_ms": float(latency),
+                   "latency_min_ms": float(latency), "path": "derp",
+                   "loss_percent": 0.0, "timed_out": False,
+                   "ts": time.time(), "mock": True})
     _remember_manual_ping(device_id, now)
     try:
         ping = await collector.ping_device(device_id, ip)

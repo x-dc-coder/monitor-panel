@@ -5,12 +5,14 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app import constants
 from app.api import ok
+from app.api.schemas import HistoryEnvelope
 from app.services import history as history_svc
 
 router = APIRouter()
 
 
-@router.get("/history")
+@router.get("/history", responses={200: {"model": HistoryEnvelope,
+                                        "description": "趋势降采样"}})
 async def history(metric: str = Query(...),
                   range_: str = Query("24h", alias="range"),
                   bucket: int | None = Query(None),

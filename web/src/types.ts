@@ -328,6 +328,7 @@ export interface HealthzData {
   uptime: number;
   version: string;
   mock: boolean;
+  mode: "mock" | "snapshot" | "live";
   node: string;
   collectors: Record<string, CollectorStat>;
 }

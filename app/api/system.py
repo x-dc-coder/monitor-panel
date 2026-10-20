@@ -5,6 +5,7 @@ from fastapi import APIRouter, Query
 
 from app import config, constants, db
 from app.api import get_aggregator, ok
+from app.api.schemas import CertsEnvelope, NetworkEnvelope, SystemEnvelope
 
 router = APIRouter()
 
@@ -13,7 +14,8 @@ def _latest(group: str, node: str | None = None) -> dict:
     return get_aggregator().latest_for(group, node)
 
 
-@router.get("/system")
+@router.get("/system", responses={200: {"model": SystemEnvelope,
+                                       "description": "系统资源快照"}})
 async def system(node: str | None = Query(None)):
     payload = _latest(constants.GROUP_SYSTEM, node)
     data = {
@@ -32,14 +34,16 @@ async def system(node: str | None = Query(None)):
     return ok(data)
 
 
-@router.get("/certs")
+@router.get("/certs", responses={200: {"model": CertsEnvelope,
+                                      "description": "证书到期快照"}})
 async def certs(node: str | None = Query(None)):
     payload = _latest(constants.GROUP_CERT_DAYS, node)
     certs = payload.get("certs", [])
     return ok({"certs": certs, "ts": payload.get("ts")})
 
 
-@router.get("/network")
+@router.get("/network", responses={200: {"model": NetworkEnvelope,
+                                        "description": "网络探测快照"}})
 async def network(node: str | None = Query(None)):
     payload = _latest(constants.GROUP_NETWORK, node)
     return ok({"probes": payload.get("probes", []), "ts": payload.get("ts")})

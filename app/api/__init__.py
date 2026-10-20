@@ -25,7 +25,3 @@ def get_aggregator() -> Aggregator:
 
 def ok(data) -> dict:
     return {"ok": True, "data": data, "ts": time.time()}
-
-
-def err(message: str, code: int = 400) -> tuple[dict, int]:
-    return {"ok": False, "error": message, "ts": time.time()}, code

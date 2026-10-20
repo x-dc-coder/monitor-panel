@@ -8,18 +8,19 @@
 from __future__ import annotations
 
 import json
-import time
 
 from fastapi import APIRouter
 
 from app import db
 from app.api import get_aggregator, ok
+from app.api.schemas import UpdatesEnvelope
 from app.collectors.updates import PROVIDERS
 
 router = APIRouter()
 
 
-@router.get("/updates")
+@router.get("/updates", responses={200: {"model": UpdatesEnvelope,
+                                        "description": "服务更新多源聚合"}})
 async def updates(provider: str | None = None, node: str | None = None):
     snapshot = get_aggregator().latest_for("grm", node)
     rows = db.get_update_items(node_id=node, provider=provider)
@@ -61,5 +62,4 @@ async def updates(provider: str | None = None, node: str | None = None):
             "degraded": bool(snapshot.get("degraded")),
             "error": snapshot.get("error"),
         },
-        "ts": time.time(),
     })

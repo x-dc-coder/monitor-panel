@@ -318,11 +318,220 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AlertRow */
+        AlertRow: {
+            /** Id */
+            id: number;
+            /** Ts */
+            ts: number;
+            /** Level */
+            level: string;
+            /** Source */
+            source: string;
+            /** Message */
+            message: string;
+            /** Resolved */
+            resolved: number;
+        };
+        /** AlertsData */
+        AlertsData: {
+            /** Alerts */
+            alerts: components["schemas"]["AlertRow"][];
+        };
+        /** AlertsOverview */
+        AlertsOverview: {
+            /** Unresolved */
+            unresolved: number;
+        };
+        /** CertSummaryItem */
+        CertSummaryItem: {
+            /** Domain */
+            domain: string;
+            /** Days Left */
+            days_left: number;
+            /** Not After */
+            not_after?: string | null;
+            /** Not Before */
+            not_before?: string | null;
+            /** Issuer */
+            issuer?: string | null;
+            /** Subject */
+            subject?: string | null;
+            /**
+             * Sans
+             * @default []
+             */
+            sans: string[];
+            /** Chain Verified */
+            chain_verified?: boolean | null;
+            /** Source */
+            source?: string | null;
+            /** Status */
+            status: string;
+            /** Error */
+            error?: string | null;
+            /** Path */
+            path?: string | null;
+        };
+        /** CertsData */
+        CertsData: {
+            /** Certs */
+            certs: components["schemas"]["CertSummaryItem"][];
+            /** Ts */
+            ts?: number | null;
+        };
+        /** CertsOverview */
+        CertsOverview: {
+            /** Total */
+            total: number;
+            /** Warn */
+            warn: number;
+            /** Crit */
+            crit: number;
+            /** Expiring */
+            expiring: components["schemas"]["CertSummaryItem"][];
+        };
+        /** DeviceRow */
+        DeviceRow: {
+            /** Device Id */
+            device_id: string;
+            /** Name */
+            name?: string | null;
+            /** Tailscale Ip */
+            tailscale_ip?: string | null;
+            /** Os */
+            os?: string | null;
+            /** Online */
+            online: boolean;
+            /** Status */
+            status: string;
+            /** Relay */
+            relay?: string | null;
+            /** Last Seen Ts */
+            last_seen_ts?: number | null;
+            /** Rx Bytes */
+            rx_bytes?: number | null;
+            /** Tx Bytes */
+            tx_bytes?: number | null;
+            /** Updated Ts */
+            updated_ts?: number | null;
+            /** Latency Ms */
+            latency_ms?: number | null;
+            /** Latency Min Ms */
+            latency_min_ms?: number | null;
+            /** Path */
+            path?: string | null;
+            /** Loss Percent */
+            loss_percent?: number | null;
+            /** Timed Out */
+            timed_out: boolean;
+            /** Ping Ts */
+            ping_ts?: number | null;
+            /** Mapped 8899 */
+            mapped_8899?: string | null;
+            /** Key Expiry Ts */
+            key_expiry_ts?: number | null;
+            /** Key Days Left */
+            key_days_left?: number | null;
+            /** Key Status */
+            key_status: string;
+            /** Dns Name */
+            dns_name?: string | null;
+            /** Allowed Ips */
+            allowed_ips: string[];
+            /** Subnet Routes */
+            subnet_routes: string[];
+            /** Exit Node */
+            exit_node: boolean;
+            /** Exit Node Option */
+            exit_node_option: boolean;
+        };
+        /** DevicesData */
+        DevicesData: {
+            /** Devices */
+            devices: components["schemas"]["DeviceRow"][];
+            /** Device Map */
+            device_map: {
+                [key: string]: string;
+            };
+        };
+        /** Envelope[AlertsData] */
+        Envelope_AlertsData_: {
+            /** Ok */
+            ok: boolean;
+            data: components["schemas"]["AlertsData"];
+            /** Ts */
+            ts: number;
+        };
+        /** Envelope[CertsData] */
+        Envelope_CertsData_: {
+            /** Ok */
+            ok: boolean;
+            data: components["schemas"]["CertsData"];
+            /** Ts */
+            ts: number;
+        };
+        /** Envelope[DevicesData] */
+        Envelope_DevicesData_: {
+            /** Ok */
+            ok: boolean;
+            data: components["schemas"]["DevicesData"];
+            /** Ts */
+            ts: number;
+        };
+        /** Envelope[FrpData] */
+        Envelope_FrpData_: {
+            /** Ok */
+            ok: boolean;
+            data: components["schemas"]["FrpData"];
+            /** Ts */
+            ts: number;
+        };
         /** Envelope[GrmApiData] */
         Envelope_GrmApiData_: {
             /** Ok */
             ok: boolean;
             data: components["schemas"]["GrmApiData"];
+            /** Ts */
+            ts: number;
+        };
+        /** Envelope[HistoryData] */
+        Envelope_HistoryData_: {
+            /** Ok */
+            ok: boolean;
+            data: components["schemas"]["HistoryData"];
+            /** Ts */
+            ts: number;
+        };
+        /** Envelope[MeData] */
+        Envelope_MeData_: {
+            /** Ok */
+            ok: boolean;
+            data: components["schemas"]["MeData"];
+            /** Ts */
+            ts: number;
+        };
+        /** Envelope[NetworkData] */
+        Envelope_NetworkData_: {
+            /** Ok */
+            ok: boolean;
+            data: components["schemas"]["NetworkData"];
+            /** Ts */
+            ts: number;
+        };
+        /** Envelope[OverviewData] */
+        Envelope_OverviewData_: {
+            /** Ok */
+            ok: boolean;
+            data: components["schemas"]["OverviewData"];
+            /** Ts */
+            ts: number;
+        };
+        /** Envelope[PingData] */
+        Envelope_PingData_: {
+            /** Ok */
+            ok: boolean;
+            data: components["schemas"]["PingData"];
             /** Ts */
             ts: number;
         };
@@ -334,6 +543,58 @@ export interface components {
             /** Ts */
             ts: number;
         };
+        /** Envelope[SystemData] */
+        Envelope_SystemData_: {
+            /** Ok */
+            ok: boolean;
+            data: components["schemas"]["SystemData"];
+            /** Ts */
+            ts: number;
+        };
+        /** Envelope[UpdatesData] */
+        Envelope_UpdatesData_: {
+            /** Ok */
+            ok: boolean;
+            data: components["schemas"]["UpdatesData"];
+            /** Ts */
+            ts: number;
+        };
+        /** FrpData */
+        FrpData: {
+            /** Tunnels */
+            tunnels: components["schemas"]["TunnelRow"][];
+            /** Serverinfo */
+            serverinfo?: {
+                [key: string]: unknown;
+            } | null;
+            /** Link */
+            link: components["schemas"]["LinkRow"][];
+            /** Degraded */
+            degraded?: boolean | null;
+            /** Proxy Mode */
+            proxy_mode?: string | null;
+            /** Source */
+            source?: string | null;
+            /** Ts */
+            ts?: number | null;
+        };
+        /** FrpOverview */
+        FrpOverview: {
+            /** Total */
+            total: number;
+            /** Online */
+            online: number;
+            /** Traffic In */
+            traffic_in?: number | null;
+            /** Traffic Out */
+            traffic_out?: number | null;
+            /** Degraded */
+            degraded: boolean;
+            /** Proxy Mode */
+            proxy_mode?: string | null;
+            /** Error */
+            error?: string | null;
+        };
         /** GrmApiData */
         GrmApiData: {
             /** Repos */
@@ -342,7 +603,7 @@ export interface components {
             /** Base Url */
             base_url: string;
             /** Ts */
-            ts: number;
+            ts?: number | null;
         };
         /** GrmApiSummary */
         GrmApiSummary: {
@@ -369,6 +630,21 @@ export interface components {
             prerelease: boolean;
             /** Published Ts */
             published_ts: number | null;
+        };
+        /** GrmOverview */
+        GrmOverview: {
+            /** Total */
+            total: number;
+            /** With Release */
+            with_release: number;
+            /** New Release */
+            new_release: number;
+            /** Degraded */
+            degraded: boolean;
+            /** Error */
+            error?: string | null;
+            /** Base Url */
+            base_url?: string | null;
         };
         /**
          * GrmRecentCommit
@@ -414,6 +690,177 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HeadscaleOverview */
+        HeadscaleOverview: {
+            /** Tcp Ok */
+            tcp_ok?: number | null;
+            /** Nodes Total */
+            nodes_total?: number | null;
+            /** Derp Region */
+            derp_region?: number | null;
+        };
+        /** HistoryData */
+        HistoryData: {
+            /** Metric */
+            metric: string;
+            /** Group */
+            group?: string | null;
+            /** Node */
+            node?: string | null;
+            /** Range */
+            range: string;
+            /** Bucket S */
+            bucket_s: number;
+            /** Points */
+            points: components["schemas"]["HistoryPoint"][];
+            /** Count */
+            count: number;
+            /** Since Ts */
+            since_ts?: number | null;
+        };
+        /** HistoryPoint */
+        HistoryPoint: {
+            /** Ts */
+            ts: number;
+            /** Value */
+            value: number;
+            /** Ts Max */
+            ts_max?: number | null;
+        };
+        /** LinkRow */
+        LinkRow: {
+            /** Device Id */
+            device_id: string;
+            /** Hostname */
+            hostname?: string | null;
+            /** Latency Ms */
+            latency_ms?: number | null;
+            /** Packet Loss Percent */
+            packet_loss_percent?: number | null;
+            /** Frpc Alive */
+            frpc_alive?: number | null;
+            /** Frps Alive */
+            frps_alive?: number | null;
+            /** Bandwidth Up Kbps */
+            bandwidth_up_kbps?: number | null;
+            /** Bandwidth Down Kbps */
+            bandwidth_down_kbps?: number | null;
+            /** Age Seconds */
+            age_seconds?: number | null;
+            /** Display Status */
+            display_status?: string | null;
+        };
+        /** MeData */
+        MeData: {
+            /** Id */
+            id?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Avatar */
+            avatar?: string | null;
+        };
+        /** NetworkData */
+        NetworkData: {
+            /** Probes */
+            probes: components["schemas"]["ProbeRow"][];
+            /** Ts */
+            ts?: number | null;
+        };
+        /** NetworkOverview */
+        NetworkOverview: {
+            /** Total */
+            total: number;
+            /** Ok */
+            ok: number;
+            /** Fail */
+            fail: number;
+        };
+        /** NodeInfo */
+        NodeInfo: {
+            /** Id */
+            id: string;
+            /** Role */
+            role?: string | null;
+            /** Last Seen Ts */
+            last_seen_ts?: number | null;
+        };
+        /** OverviewData */
+        OverviewData: {
+            /** Mock */
+            mock: boolean;
+            /** Mode */
+            mode: string;
+            /** Updated At */
+            updated_at?: number | null;
+            frp: components["schemas"]["FrpOverview"];
+            tailscale: components["schemas"]["TailscaleOverview"];
+            system: components["schemas"]["SystemOverview"];
+            headscale: components["schemas"]["HeadscaleOverview"];
+            certs: components["schemas"]["CertsOverview"];
+            network: components["schemas"]["NetworkOverview"];
+            grm: components["schemas"]["GrmOverview"];
+            /** Lab */
+            lab?: {
+                [key: string]: unknown;
+            } | null;
+            alerts: components["schemas"]["AlertsOverview"];
+            /** Nodes */
+            nodes: components["schemas"]["NodeInfo"][];
+        };
+        /** PingData */
+        PingData: {
+            /** Device Id */
+            device_id: string;
+            /** Hostname */
+            hostname?: string | null;
+            /** Tailscale Ip */
+            tailscale_ip?: string | null;
+            /** Latency Ms */
+            latency_ms?: number | null;
+            /** Latency Min Ms */
+            latency_min_ms?: number | null;
+            /** Path */
+            path?: string | null;
+            /** Loss Percent */
+            loss_percent?: number | null;
+            /** Timed Out */
+            timed_out: boolean;
+            /** Ts */
+            ts?: number | null;
+            /** Packets */
+            packets?: number[] | null;
+            /** Mock */
+            mock?: boolean | null;
+        };
+        /** ProbeRow */
+        ProbeRow: {
+            /** Name */
+            name: string;
+            /** Kind */
+            kind: string;
+            /** Target */
+            target: string;
+            /** Port */
+            port?: number | null;
+            /** Latency Ms */
+            latency_ms?: number | null;
+            /** Loss Percent */
+            loss_percent?: number | null;
+            /** Reachable */
+            reachable: boolean | number;
+            /** Elapsed Ms */
+            elapsed_ms?: number | null;
+            /** Status Code */
+            status_code?: number | null;
+            /** Error */
+            error?: string | null;
+            /** Ts */
+            ts?: number | null;
+            /** Mock */
+            mock?: boolean | null;
         };
         /** ServiceItem */
         ServiceItem: {
@@ -462,7 +909,7 @@ export interface components {
             range: number[];
             summary: components["schemas"]["ServicesSummary"];
             /** Ts */
-            ts: number;
+            ts?: number | null;
         };
         /** ServicesSummary */
         ServicesSummary: {
@@ -474,6 +921,118 @@ export interface components {
             closed: number;
             /** Manual */
             manual: number;
+        };
+        /** SystemData */
+        SystemData: {
+            /** Cpu Percent */
+            cpu_percent?: number | null;
+            /** Mem Percent */
+            mem_percent?: number | null;
+            /** Disk */
+            disk?: {
+                [key: string]: unknown;
+            } | null;
+            /** Load */
+            load?: number[] | null;
+            /** Net */
+            net?: {
+                [key: string]: number;
+            } | null;
+            /** Ts */
+            ts?: number | null;
+        };
+        /** SystemOverview */
+        SystemOverview: {
+            /** Cpu Percent */
+            cpu_percent?: number | null;
+            /** Mem Percent */
+            mem_percent?: number | null;
+            /** Load */
+            load?: number[] | null;
+            /** Net */
+            net?: {
+                [key: string]: number;
+            } | null;
+            /** Disk */
+            disk?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** TailscaleOverview */
+        TailscaleOverview: {
+            /** Total */
+            total: number;
+            /** Online */
+            online: number;
+            /** Backend State */
+            backend_state?: string | null;
+            /** Any Derp */
+            any_derp: boolean;
+        };
+        /** TunnelRow */
+        TunnelRow: {
+            /** Tunnel Id */
+            tunnel_id: string;
+            /** Type */
+            type?: string | null;
+            /** Remote Port */
+            remote_port?: number | null;
+            /** Local Addr */
+            local_addr?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Traffic In */
+            traffic_in?: number | null;
+            /** Traffic Out */
+            traffic_out?: number | null;
+            /** Cur Conns */
+            cur_conns?: number | null;
+            /** Last Start Time */
+            last_start_time?: string | null;
+            /** Updated Ts */
+            updated_ts?: number | null;
+        };
+        /** UpdateItemRow */
+        UpdateItemRow: {
+            /** Provider */
+            provider: string;
+            /** Item Key */
+            item_key: string;
+            /** Title */
+            title?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Version */
+            version?: string | null;
+            /** Version Url */
+            version_url?: string | null;
+            /** Is New */
+            is_new: boolean;
+            /** Prerelease */
+            prerelease: boolean;
+            /** Tags */
+            tags: string[];
+            /** Is Pinned */
+            is_pinned: boolean;
+            /** Summary */
+            summary?: string | null;
+            /** Published Ts */
+            published_ts?: number | null;
+            /** Updated Ts */
+            updated_ts?: number | null;
+        };
+        /** UpdatesData */
+        UpdatesData: {
+            /** Items */
+            items: components["schemas"]["UpdateItemRow"][];
+            /** Providers */
+            providers: string[];
+            /** Summary */
+            summary: {
+                [key: string]: unknown;
+            };
+            /** Ts */
+            ts?: number | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -566,13 +1125,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description 当前登录用户 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_MeData_"];
                 };
             };
         };
@@ -588,13 +1147,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description 聚合总览 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_OverviewData_"];
                 };
             };
             /** @description Validation Error */
@@ -620,13 +1179,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description 告警事件流 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_AlertsData_"];
                 };
             };
             /** @description Validation Error */
@@ -651,13 +1210,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description 设备清单 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_DevicesData_"];
                 };
             };
             /** @description Validation Error */
@@ -682,13 +1241,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description 手动 ping 结果 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_PingData_"];
                 };
             };
             /** @description Validation Error */
@@ -713,13 +1272,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description frps 隧道 + 链路质量 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_FrpData_"];
                 };
             };
             /** @description Validation Error */
@@ -779,13 +1338,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description 趋势降采样 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_HistoryData_"];
                 };
             };
             /** @description Validation Error */
@@ -810,13 +1369,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description 系统资源快照 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_SystemData_"];
                 };
             };
             /** @description Validation Error */
@@ -841,13 +1400,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description 证书到期快照 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_CertsData_"];
                 };
             };
             /** @description Validation Error */
@@ -872,13 +1431,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description 网络探测快照 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_NetworkData_"];
                 };
             };
             /** @description Validation Error */
@@ -894,7 +1453,9 @@ export interface operations {
     };
     services_api_services_get: {
         parameters: {
-            query?: never;
+            query?: {
+                node?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -908,6 +1469,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_ServicesData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -924,13 +1494,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description 服务更新多源聚合 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Envelope_UpdatesData_"];
                 };
             };
             /** @description Validation Error */

@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import json
-import time
 
 from fastapi import APIRouter
 
@@ -23,7 +22,7 @@ router = APIRouter()
 async def grm(node: str | None = None):
     agg = get_aggregator()
     snapshot = agg.latest_for("grm", node)
-    rows = db.get_grm_repos()
+    rows = db.get_grm_repos(node or config.NODE_ID)
     out = []
     for r in rows:
         out.append({
@@ -57,5 +56,4 @@ async def grm(node: str | None = None):
             "error": snapshot.get("error"),
         },
         "base_url": config.GRM_BASE_URL,
-        "ts": time.time(),
     })

@@ -5,8 +5,6 @@
 """
 from __future__ import annotations
 
-import time
-
 from fastapi import APIRouter
 
 from app import config, constants, db
@@ -18,8 +16,8 @@ router = APIRouter()
 
 @router.get("/services", responses={200: {"model": ServicesEnvelope,
                                            "description": "服务台账"}})
-async def services():
-    rows = db.get_services()
+async def services(node: str | None = None):
+    rows = db.get_services(node_id=node or config.NODE_ID)
     out = []
     for r in rows:
         ip = r.get("tailscale_ip") or ""
@@ -54,5 +52,4 @@ async def services():
             "closed": sum(1 for r in out if r["status"] == "closed"),
             "manual": sum(1 for r in out if r["source"] == "manual"),
         },
-        "ts": time.time(),
     })

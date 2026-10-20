@@ -15,6 +15,8 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 from app import config
+from app.api import ok
+from app.api.schemas import MeEnvelope
 
 log = logging.getLogger(__name__)
 
@@ -110,10 +112,11 @@ async def logout(request: Request):
     return RedirectResponse(url=logout_url)
 
 
-@router.get("/api/me")
+@router.get("/api/me", responses={200: {"model": MeEnvelope,
+                                       "description": "当前登录用户"}})
 async def me(request: Request):
     """获取当前已登录用户信息（前端调用）。"""
     user = request.session.get("user")
     if not user:
-        return {"ok": False, "error": "unauthorized", "data": None}
-    return {"ok": True, "data": user}
+        raise HTTPException(status_code=401, detail="unauthorized")
+    return ok(user)

@@ -72,11 +72,9 @@ async def ingest(body: dict):
     if unknown_nodes:
         raise HTTPException(
             status_code=400,
-            detail={
-                "error": "unknown node_id（未注册：加入 tailnet 或登记 MONITOR_NODES）",
-                "rejected": sorted(unknown_nodes),
-                "registered": sorted(known_ids),
-            },
+            detail=(f"unknown node_id: {', '.join(sorted(unknown_nodes))}"
+                    "（加入 tailnet 或登记 MONITOR_NODES）；"
+                    f"registered: {', '.join(sorted(known_ids))}"),
         )
 
     n = 0
