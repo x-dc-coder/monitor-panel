@@ -56,6 +56,7 @@ class Scheduler:
         self._heap: list[tuple[float, int, ScheduledTask]] = []  # (next_run, seq, task)
         self._tasks: dict[str, ScheduledTask] = {}
         self._running: set[str] = set()
+        self._active: set[asyncio.Task] = set()  # 在途执行 Task（stop 收尾等待用）
         self._seq = 0
         self._stop = asyncio.Event()
 
@@ -91,6 +92,9 @@ class Scheduler:
             heapq.heappush(self._heap, (task.next_run, self._seq, task))
             return
         self._running.add(task.name)
+        current = asyncio.current_task()
+        if current is not None:
+            self._active.add(current)
         started = time.monotonic()
         try:
             timeout = task.timeout or min(task.interval * 2, 60.0)
@@ -105,6 +109,8 @@ class Scheduler:
             log.exception("scheduler: %s failed", task.name)
         finally:
             self._running.discard(task.name)
+            if current is not None:
+                self._active.discard(current)
             task.runs += 1
             task.last_run_dur = time.monotonic() - started
             now = time.monotonic()
@@ -146,11 +152,15 @@ class Scheduler:
 
     async def stop(self) -> None:
         self._stop.set()
-        # 等当前任务收尾（最多 5s）
-        try:
-            await asyncio.wait_for(asyncio.gather(*[
-                asyncio.sleep(0) for _ in range(1)]), timeout=0)
-        except Exception:  # noqa: BLE001
-            pass
+        # 等在途任务收尾（最多 5s）；旧实现 gather(sleep(0), timeout=0) 不等待任何任务，
+        # 实际靠 main.py 的 cancel 硬停。排除自身，避免 "Task cannot await on itself"。
+        active = [t for t in self._active if t is not asyncio.current_task()]
+        if active:
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*active, return_exceptions=True), timeout=5)
+            except asyncio.TimeoutError:
+                log.warning("scheduler: stop timed out after 5s, %d task(s) still running",
+                            len(active))
         for name in list(self._running):
             log.info("scheduler: %s still running at stop", name)
