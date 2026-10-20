@@ -17,14 +17,15 @@ export function renderTunnels(): string {
   }
   return head + tunnels.map((t) =>
     win(t.tunnel_id + " · " + (t.type || "?") + " /" + (t.remote_port ?? "?"),
-      "traffic today · 30s",
+      "traffic today · 30s" + (t.status === "stale" ? " · ⚠ 数据陈旧（frpc 长期未连，非实时）" : ""),
       '<div class="flow">' +
       '<span class="node">0.0.0.0:<b>' + esc(String(t.remote_port ?? "?")) + '</b><span class="tag">公网</span></span>' +
       '<span class="arr">───▶<span class="lab">' + esc(t.type || "?") + "</span>───▶</span>" +
       '<span class="node"><b>' + esc(t.local_addr || "?") + '</b><span class="tag">内网</span></span>' +
       "</div>" +
       tb(["状态", "连接数", "今日入流量", "今日出流量"],
-        "<tr><td>" + st(t.status === "online" ? "ok" : "crit", t.status) +
+        "<tr><td>" + st(t.status === "online" ? "ok" : t.status === "stale" ? "off" : "crit",
+          t.status === "stale" ? "已断开(陈旧)" : t.status) +
         '</td><td class="num">' + esc(String(t.cur_conns ?? "—")) + '</td><td class="num">' +
         fmtBytes(t.traffic_in) + '</td><td class="num">' + fmtBytes(t.traffic_out) + "</td></tr>")))
     .join("");

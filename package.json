@@ -4,7 +4,7 @@
   "private": true,
   "description": "monitor.dc-sy.cn 统一监控面板前端（TypeScript + esbuild）",
   "scripts": {
-    "build": "esbuild web/src/main.ts --bundle --outfile=web/dist/app.js --minify",
+    "build": "esbuild web/src/main.ts --bundle --minify --outfile=web/dist/app.js && node scripts/bump_assets.mjs",
     "build:dev": "esbuild web/src/main.ts --bundle --outfile=web/dist/app.js --sourcemap",
     "watch": "esbuild web/src/main.ts --bundle --outfile=web/dist/app.js --sourcemap --watch",
     "typecheck": "tsc --noEmit",

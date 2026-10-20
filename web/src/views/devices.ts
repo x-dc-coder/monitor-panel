@@ -15,6 +15,8 @@ function statusCell(d: DeviceRow): string {
 }
 
 function latCell(d: DeviceRow): string {
+  // 离线设备的 latency 是陈旧残留值，显示 "—" 而非误导性数字（2026-10-20 面板实录）
+  if (!d.online) return '<span class="muted">—</span>';
   if (d.timed_out) return '<span style="color:var(--warn)">超时</span>';
   return '<span class="num">' + fmtMs(d.latency_ms) + "</span>";
 }
