@@ -130,6 +130,35 @@ def test_services_db_upsert_roundtrip(tmp_path):
     db.close()
 
 
+def test_upsert_preserves_manual_row(tmp_path):
+    """manual 行不被自动采集覆盖：同键 upsert auto/open 后 source/enabled 保持原值。"""
+    db.close()
+    db.init_db(str(tmp_path / "t.db"))
+    base = {"device_id": "dev-a", "device_name": "a", "tailscale_ip": "100.64.0.9",
+            "port": 10003, "auto_name": "manual-svc", "status": "open",
+            "first_seen_ts": 100.0, "last_seen_ts": 100.0, "updated_ts": 100.0}
+    db.upsert_services("cloud-1", [
+        {**base, "source": "manual", "enabled": 0},
+        {**base, "port": 10004, "source": "auto", "enabled": 1},
+    ])
+    # 采集器开放路径：source=auto、enabled 落到默认 1
+    db.upsert_services("cloud-1", [
+        {**base, "source": "auto", "enabled": 1,
+         "last_seen_ts": 200.0, "updated_ts": 200.0},
+        {**base, "port": 10004, "source": "auto", "enabled": 1,
+         "last_seen_ts": 200.0, "updated_ts": 200.0},
+    ])
+    by_port = {r["port"]: r for r in db.get_services()}
+    assert by_port[10003]["source"] == "manual"
+    assert by_port[10003]["enabled"] == 0
+    assert by_port[10003]["last_seen_ts"] == 200.0   # 其余列照常刷新
+    # 对照：auto 行行为不变
+    assert by_port[10004]["source"] == "auto"
+    assert by_port[10004]["enabled"] == 1
+    assert by_port[10004]["last_seen_ts"] == 200.0
+    db.close()
+
+
 def test_services_aggregator_persists(registry, tmp_path):
     """aggregator.ingest(services result) → services 表落库 + samples 趋势可用。"""
     from app.services.aggregator import Aggregator

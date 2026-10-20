@@ -20,9 +20,9 @@ router = APIRouter()
 
 @router.get("/grm", responses={200: {"model": GrmEnvelope,
                                      "description": "Release 监控（grm 只读聚合）"}})
-async def grm():
+async def grm(node: str | None = None):
     agg = get_aggregator()
-    snapshot = agg.latest.get("grm") or {}
+    snapshot = agg.latest_for("grm", node)
     rows = db.get_grm_repos()
     out = []
     for r in rows:

@@ -38,6 +38,8 @@ def test_enabled_wrong_token_returns_401(client, monkeypatch):
 def test_enabled_correct_token_accepts(client, monkeypatch):
     monkeypatch.setattr(config, "INGEST_ENABLED", True)
     monkeypatch.setattr(config, "INGEST_TOKEN", "secret-token")
+    from app import db
+    db.seed_nodes([{"id": "cloud-2", "name": "cloud-2", "role": "secondary"}])
     r = _post(client, body={"results": [
         {"node_id": "cloud-2", "group": "system",
          "metrics": [{"name": "cpu_pct", "value": 12.5, "ts": 1700000000.0}]},
@@ -53,3 +55,32 @@ def test_enabled_correct_token_rejects_bad_body(client, monkeypatch):
     monkeypatch.setattr(config, "INGEST_TOKEN", "secret-token")
     r = _post(client, body={"unexpected": 1}, token="secret-token")
     assert r.status_code == 400
+
+
+def test_ingest_empty_token_bearer_rejected(client, monkeypatch):
+    """启用但 token 为空时，空 Bearer 头与无头都必须 401（不得匹配 "Bearer "）。"""
+    monkeypatch.setattr(config, "INGEST_ENABLED", True)
+    monkeypatch.setattr(config, "INGEST_TOKEN", "")
+
+    r = _post(client, body={"results": []}, token="")
+    assert r.status_code == 401
+    assert "not configured" in r.json()["detail"]
+
+    r = _post(client, body={"results": []})
+    assert r.status_code == 401
+    assert "not configured" in r.json()["detail"]
+
+
+def test_validate_config_ingest_requires_token(monkeypatch):
+    """live 模式下 INGEST_ENABLED=1 必须配置 token。"""
+    monkeypatch.setattr(config, "MOCK", False)
+    monkeypatch.setattr(config, "SNAPSHOT", False)
+    monkeypatch.setattr(config, "FRPS_PASS", "frps-pass")
+    monkeypatch.setattr(config, "LEGACY_TOKEN", "legacy-token")
+    monkeypatch.setattr(config, "SSO_ENABLED", False)
+    monkeypatch.setattr(config, "INGEST_ENABLED", True)
+    monkeypatch.setattr(config, "INGEST_TOKEN", "")
+
+    errors = config.validate_config()
+    assert errors
+    assert any("MONITOR_INGEST_TOKEN" in e for e in errors)

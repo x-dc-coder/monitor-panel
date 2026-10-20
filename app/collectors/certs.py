@@ -282,8 +282,23 @@ class CertsCollector(Collector):
                 domains.append(d)
         certs: list[dict] = []
         seen: set[str] = set()
-        # TLS 探测并发跑（外部视角优先）
-        probed = await asyncio.gather(*[self._probe_tls(d) for d in domains])
+        # TLS 探测并发跑（外部视角优先）；单域名异常隔离，不废掉整轮
+        probed_raw = await asyncio.gather(*[self._probe_tls(d) for d in domains],
+                                          return_exceptions=True)
+        probed: list[dict | None] = []
+        for domain, p in zip(domains, probed_raw):
+            # CancelledError 是 BaseException 而非 Exception。
+            # 子任务单独取消时 gather(return_exceptions=True) 按官方语义收进结果、
+            # 不取消 outer；外层取消在 await gather 处直接抛，到不了这里。
+            if isinstance(p, asyncio.CancelledError):
+                log.warning("certs: probe %s cancelled", domain)
+                p = None
+            elif isinstance(p, Exception):
+                log.warning("certs: probe %s failed: %s", domain, p)
+                p = None
+            elif isinstance(p, BaseException):  # KeyboardInterrupt / SystemExit
+                raise p
+            probed.append(p)
         for domain, c in zip(domains, probed):
             if c:
                 certs.append(c)

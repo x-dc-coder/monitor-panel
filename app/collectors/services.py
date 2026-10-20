@@ -199,15 +199,11 @@ class ServicesCollector(Collector):
                 title = m.group(1).strip() if m else None
                 scheme = "https" if https else "http"
                 url = f"{scheme}://{host}:{port}{path}"
+            elif head.startswith("SSH-"):
+                # sshd 主动 banner，首读即可判定（无需二次读）
+                protocol = "ssh"
         except Exception:  # noqa: BLE001 —— 非 HTTP（读超时/EOF/协议错）
             pass
-        if protocol == "tcp":
-            try:
-                banner = await asyncio.wait_for(reader.read(64), timeout=1.0)
-                if banner.startswith(b"SSH-"):
-                    protocol = "ssh"
-            except Exception:  # noqa: BLE001
-                pass
         writer.close()
         try:
             await writer.wait_closed()

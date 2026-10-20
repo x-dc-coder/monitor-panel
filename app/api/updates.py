@@ -21,14 +21,21 @@ router = APIRouter()
 
 @router.get("/updates")
 async def updates(provider: str | None = None, node: str | None = None):
-    snapshot = get_aggregator().latest.get("grm") or {}
+    snapshot = get_aggregator().latest_for("grm", node)
     rows = db.get_update_items(node_id=node, provider=provider)
+    # 读侧合并 provider 富字段（P1-4）：update_items 保持泛型，is_pinned/summary
+    # 取自 grm_repos；item_key≡repo_id。非 grm 过滤时无需查询。
+    grm_by_id: dict[str, dict] = {}
+    if provider is None or provider == "grm":
+        grm_by_id = {r["repo_id"]: r for r in db.get_grm_repos(node_id=node)
+                     if r.get("repo_id")}
     out = []
     for r in rows:
         try:
             tags = json.loads(r.get("tags") or "[]")
         except json.JSONDecodeError:
             tags = []
+        grm_row = grm_by_id.get(r.get("item_key") or "")
         out.append({
             "provider": r.get("provider"),
             "item_key": r.get("item_key"),
@@ -39,6 +46,8 @@ async def updates(provider: str | None = None, node: str | None = None):
             "is_new": bool(r.get("is_new")),
             "prerelease": bool(r.get("prerelease")),
             "tags": tags,
+            "is_pinned": bool(grm_row.get("is_pinned")) if grm_row else False,
+            "summary": grm_row.get("readme_summary") if grm_row else None,
             "published_ts": r.get("published_ts"),
             "updated_ts": r.get("updated_ts"),
         })

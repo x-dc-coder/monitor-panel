@@ -1,0 +1,183 @@
+"""多节点基础架构测试（Pkg 2）：
+1. 远端不覆盖本地快照，支持 ?node= 查询对应节点
+2. latest_for 单元测试
+3. 未知节点整批 400（原子性：混合未知节点整批不写）
+4. 已注册节点 touch_node 心跳通电（last_seen_ts 更新）
+5. /api/history 多节点过滤：缺省本机、?node=指定、?node=all 聚合
+6. /api/system 快照空时无条件回退 samples 最新值（#14）
+"""
+import time
+import pytest
+from app import config, constants, db
+from app.api import set_aggregator
+from app.collectors.base import CollectorResult
+from app.services.aggregator import Aggregator
+
+
+def test_remote_does_not_overwrite_local(client):
+    """远端不覆盖本地快照：写入 cloud-1 与 cloud-2，缺省读 cloud-1，?node=cloud-2 读远端。"""
+    agg = Aggregator()
+    set_aggregator(agg)
+
+    r1 = CollectorResult(node_id="cloud-1", group=constants.GROUP_SYSTEM)
+    r1.payload = {"cpu_percent": 15.0, "mem_percent": 40.0}
+    r2 = CollectorResult(node_id="cloud-2", group=constants.GROUP_SYSTEM)
+    r2.payload = {"cpu_percent": 85.0, "mem_percent": 90.0}
+
+    agg._ingest_blocking(r1, time.time())
+    agg._ingest_blocking(r2, time.time())
+
+    # 缺省返回本机（cloud-1）
+    resp1 = client.get("/api/system")
+    assert resp1.status_code == 200
+    assert resp1.json()["data"]["cpu_percent"] == 15.0
+
+    # 显式 ?node=cloud-2 返回远端
+    resp2 = client.get("/api/system", params={"node": "cloud-2"})
+    assert resp2.status_code == 200
+    assert resp2.json()["data"]["cpu_percent"] == 85.0
+
+
+def test_latest_for_direct():
+    """latest_for 按 (node_id, group) 分节点取数。"""
+    agg = Aggregator()
+    r_local = CollectorResult(node_id="cloud-1", group=constants.GROUP_NETWORK)
+    r_local.payload = {"probes": [{"name": "local-probe"}]}
+    r_remote = CollectorResult(node_id="cloud-2", group=constants.GROUP_NETWORK)
+    r_remote.payload = {"probes": [{"name": "remote-probe"}]}
+
+    agg._ingest_blocking(r_local, time.time())
+    agg._ingest_blocking(r_remote, time.time())
+
+    assert agg.latest_for(constants.GROUP_NETWORK)["probes"][0]["name"] == "local-probe"
+    assert agg.latest_for(constants.GROUP_NETWORK, "cloud-1")["probes"][0]["name"] == "local-probe"
+    assert agg.latest_for(constants.GROUP_NETWORK, "cloud-2")["probes"][0]["name"] == "remote-probe"
+    assert agg.latest_for(constants.GROUP_NETWORK, "unknown-node") == {}
+
+
+def test_ingest_unknown_node_atomicity_and_400(client, monkeypatch):
+    """未知节点拒绝并返回 400（含 rejected/registered）；混合未知节点时整批不写。"""
+    monkeypatch.setattr(config, "INGEST_ENABLED", True)
+    monkeypatch.setattr(config, "INGEST_TOKEN", "test-token")
+
+    # 确认初始状态只有 cloud-1，清空已知 samples 获得基线
+    conn = db._cursor()
+    with db._lock:
+        conn.execute("DELETE FROM samples WHERE metric_group='system'")
+        conn.commit()
+
+    nodes = [n["id"] for n in db.get_nodes()]
+    assert "cloud-1" in nodes
+    assert "unknown-node" not in nodes
+
+    headers = {"Authorization": "Bearer test-token"}
+    ts = time.time()
+
+    body = {
+        "results": [
+            {
+                "node_id": "cloud-1",
+                "group": "system",
+                "metrics": [{"name": "cpu_percent", "value": 11.0, "ts": ts}],
+            },
+            {
+                "node_id": "unknown-node",
+                "group": "system",
+                "metrics": [{"name": "cpu_percent", "value": 99.0, "ts": ts}],
+            },
+        ]
+    }
+
+    r = client.post("/api/ingest", json=body, headers=headers)
+    assert r.status_code == 400
+    detail = r.json()["detail"]
+    assert detail["error"] == "unknown node_id"
+    assert "unknown-node" in detail["rejected"]
+    assert "cloud-1" in detail["registered"]
+
+    # 原子性：混合批被拒绝，cloud-1 的 sample 也不应写入
+    _, _, count = db.query_sample_range("cpu_percent")
+    assert count == 0
+
+
+def test_ingest_accepted_touches_node(client, monkeypatch):
+    """已注册节点写入时更新 monitor_nodes 的 last_seen_ts。"""
+    monkeypatch.setattr(config, "INGEST_ENABLED", True)
+    monkeypatch.setattr(config, "INGEST_TOKEN", "test-token")
+
+    conn = db._cursor()
+    with db._lock:
+        conn.execute("DELETE FROM monitor_nodes WHERE id='cloud-2'")
+        conn.commit()
+
+    db.seed_nodes([{"id": "cloud-2", "name": "cloud-2", "role": "secondary"}])
+    node_before = next(n for n in db.get_nodes() if n["id"] == "cloud-2")
+    assert node_before["last_seen_ts"] is None
+
+    headers = {"Authorization": "Bearer test-token"}
+    body = {
+        "results": [
+            {
+                "node_id": "cloud-2",
+                "group": "system",
+                "metrics": [{"name": "cpu_percent", "value": 25.0, "ts": time.time()}],
+            }
+        ]
+    }
+
+    r = client.post("/api/ingest", json=body, headers=headers)
+    assert r.status_code == 200
+    assert r.json()["data"]["accepted"] == 1
+
+    node_after = next(n for n in db.get_nodes() if n["id"] == "cloud-2")
+    assert node_after["last_seen_ts"] is not None
+    assert node_after["last_seen_ts"] > 0
+
+
+def test_api_history_node_filtering(client):
+    """/api/history 支持缺省本机、?node=指定节点、?node=all 聚合。"""
+    # 清空在 lifespan 启动时由 mock 采集器插入的初始 system 样本，确保确定性
+    conn = db._cursor()
+    with db._lock:
+        conn.execute("DELETE FROM samples WHERE metric_group='system'")
+        conn.commit()
+
+    ts = time.time()
+    db.insert_samples("cloud-1", "system", [("cpu_percent", 20.0, ts)])
+    db.insert_samples("cloud-2", "system", [("cpu_percent", 60.0, ts)])
+
+    # 1. 缺省：只有本机 cloud-1 (20.0)
+    r_default = client.get("/api/history", params={"metric": "cpu_percent", "group": "system", "range": "1h"})
+    assert r_default.status_code == 200
+    pts_default = r_default.json()["data"]["points"]
+    assert len(pts_default) == 1
+    assert pts_default[0]["value"] == 20.0
+
+    # 2. ?node=cloud-2：只有远端 (60.0)
+    r_remote = client.get("/api/history", params={"metric": "cpu_percent", "group": "system", "range": "1h", "node": "cloud-2"})
+    assert r_remote.status_code == 200
+    pts_remote = r_remote.json()["data"]["points"]
+    assert len(pts_remote) == 1
+    assert pts_remote[0]["value"] == 60.0
+
+    # 3. ?node=all：显式跨节点聚合 (AVG(20, 60) = 40.0)
+    r_all = client.get("/api/history", params={"metric": "cpu_percent", "group": "system", "range": "1h", "node": "all"})
+    assert r_all.status_code == 200
+    pts_all = r_all.json()["data"]["points"]
+    assert len(pts_all) == 1
+    assert pts_all[0]["value"] == 40.0
+
+
+def test_api_system_restart_fallback(client):
+    """#14：快照为空时无条件回退 samples 最新值。"""
+    agg = Aggregator()
+    set_aggregator(agg)
+
+    ts = time.time()
+    db.insert_samples("cloud-1", "system", [("cpu_percent", 33.3, ts), ("mem_percent", 55.5, ts)])
+
+    r = client.get("/api/system")
+    assert r.status_code == 200
+    data = r.json()["data"]
+    assert data["cpu_percent"] == 33.3
+    assert data["mem_percent"] == 55.5

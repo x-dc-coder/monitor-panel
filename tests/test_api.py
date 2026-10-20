@@ -27,6 +27,9 @@ def test_overview_and_endpoints(client, ingest_all):
     assert d["certs"]["total"] == 4
     assert d["certs"]["crit"] == 1
     assert "system" in d and "alerts" in d
+    assert "nodes" in d
+    node_ids = {n["id"] for n in d["nodes"]}
+    assert "cloud-1" in node_ids
 
     r = client.get("/api/devices")
     assert r.status_code == 200

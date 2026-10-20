@@ -1,5 +1,6 @@
 """调度器测试：overrun 跳过不追跑、错误隔离、超时 kill。"""
 import asyncio
+import time
 
 from app.scheduler import Scheduler
 
@@ -61,3 +62,27 @@ def test_timeout_kills_slow_job():
     stats = sched.stats()["hang"]
     assert stats["errors"] >= 1
     assert "timeout" in (stats["last_error"] or "")
+
+
+def test_stop_waits_running_task():
+    """stop() 必须等在途任务收尾（旧实现 gather(sleep(0), timeout=0) 不等待）。"""
+    sched = Scheduler()
+    state = {"done": False}
+
+    async def slow_job():
+        await asyncio.sleep(0.3)
+        state["done"] = True
+
+    async def scenario():
+        sched.add("slow", 10, slow_job, timeout=5, first_delay=0.01)
+        run_task = asyncio.create_task(sched.run())
+        await asyncio.sleep(0.05)  # 确保已进入 _run_one
+        started = time.monotonic()
+        await sched.stop()
+        elapsed = time.monotonic() - started
+        await run_task
+        return elapsed
+
+    elapsed = asyncio.run(scenario())
+    assert state["done"], "stop() 返回时在途任务应已完整执行"
+    assert elapsed < 5

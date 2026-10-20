@@ -14,7 +14,8 @@ router = APIRouter()
 async def history(metric: str = Query(...),
                   range_: str = Query("24h", alias="range"),
                   bucket: int | None = Query(None),
-                  group: str | None = Query(None)):
+                  group: str | None = Query(None),
+                  node: str | None = Query(None)):
     # metric 白名单校验（评审 A 遗漏 2）
     if group:
         if not constants.is_valid_metric(group, metric):
@@ -25,7 +26,7 @@ async def history(metric: str = Query(...),
                  for g in constants.GROUP_METRICS):
         raise HTTPException(status_code=400, detail=f"unknown metric {metric!r}")
     try:
-        data = history_svc.query(metric, range_, bucket, group=group)
+        data = history_svc.query(metric, range_, bucket, group=group, node_id=node)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ok(data)

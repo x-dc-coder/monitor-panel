@@ -9,8 +9,8 @@ router = APIRouter()
 
 
 @router.get("/overview")
-async def overview():
-    data = get_aggregator().overview()
+async def overview(node: str | None = None):
+    data = get_aggregator().overview(node_id=node)
     return ok(data)
 
 

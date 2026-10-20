@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 
@@ -19,13 +20,19 @@ log = logging.getLogger(__name__)
 
 class Aggregator:
     def __init__(self) -> None:
-        self.latest: dict[str, dict] = {}      # group → 最新 payload（API 读一致快照）
-        self.latest_ts: dict[str, float] = {}
+        self.latest: dict[tuple[str, str], dict] = {}      # (node_id, group) → 最新 payload（API 读一致快照）
+        self.latest_ts: dict[tuple[str, str], float] = {}
         self._ping_streak: dict[str, int] = {}  # 设备 → 连续超时轮数（防抖）
+
+    def latest_for(self, group: str, node_id: str | None = None) -> dict:
+        nid = node_id or config.NODE_ID
+        return self.latest.get((nid, group), {})
 
     # ---------------- 入口 ----------------
     async def ingest(self, result: CollectorResult) -> None:
-        ts = time.time()
+        await asyncio.to_thread(self._ingest_blocking, result, time.time())
+
+    def _ingest_blocking(self, result: CollectorResult, ts: float) -> None:
         try:
             # 1) samples：主 group + 扩展 group，一次批量事务
             groups = [(result.group, result.metrics)] + list(result.groups.items())
@@ -36,13 +43,14 @@ class Aggregator:
                     if isinstance(m, Metric):
                         rows.append((m.name, m.value, m.ts or ts))
                     else:
-                        rows.append((m[0], m[1], m[2] or ts if len(m) > 2 else ts))
+                        # 显式括号：3 元组缺省 ts 回退 now；2 元组直接用 now
+                        rows.append((m[0], m[1], (m[2] or ts) if len(m) > 2 else ts))
                 db.insert_samples(result.node_id, group, rows)
 
             # 2) 快照缓存
-            self.latest_ts[result.group] = ts
+            self.latest_ts[(result.node_id, result.group)] = ts
             if result.payload is not None:
-                self.latest[result.group] = result.payload
+                self.latest[(result.node_id, result.group)] = result.payload
 
             # 3) 各 group 专用处理（快照表/阈值/告警）——主 group + 扩展 group
             groups_handled = set()
@@ -205,9 +213,13 @@ class Aggregator:
             error = c.get("error")
             days = c.get("days_left")
             if error or c.get("status") == constants.LEVEL_CRIT or                (days is not None and days < config.THRESHOLDS["cert_crit_days"]):
-                msg = (f"证书 {domain} 探测失败：{error}"
-                       if error else
-                       f"证书 {domain} 剩余 {days:.0f} 天，即将过期")
+                if error:
+                    msg = f"证书 {domain} 探测失败：{error}"
+                elif days is None:
+                    # status=CRIT 但天数缺失（远端上报缺字段）→ 不得格式化 None
+                    msg = f"证书 {domain} 状态严重（剩余天数未知）"
+                else:
+                    msg = f"证书 {domain} 剩余 {days:.0f} 天，即将过期"
                 self._alert(constants.LEVEL_CRIT, src, msg)
             elif days is not None and days < config.THRESHOLDS["cert_warn_days"]:
                 self._alert(constants.LEVEL_WARN, src,
@@ -331,10 +343,10 @@ class Aggregator:
         rows = payload.get("repos") or []
         db.upsert_grm_repos(result.node_id, rows)
         # Phase 3：同步写入统一 update_items（grm 为首个 UpdateProvider）
+        # 非降级轮次无条件 prune：空清单 = grm 侧零仓库 → 清空该 node 全部行
         from app.collectors.updates import grm as grm_provider
         items = grm_provider.rows_to_items(result.node_id, rows, ts)
-        if items:
-            db.upsert_update_items(result.node_id, items)
+        db.upsert_update_items(result.node_id, items, prune=True)
 
     # ---------------- 告警 ----------------
     @staticmethod
@@ -343,21 +355,23 @@ class Aggregator:
             log.warning("alert[%s] %s: %s", level, source, message)
 
     # ---------------- 总览聚合（/api/overview 主轮询点） ----------------
-    def overview(self) -> dict:
-        frp = self.latest.get(constants.GROUP_FRP_TRAFFIC, {})
+    def overview(self, node_id: str | None = None) -> dict:
+        nid = node_id or config.NODE_ID
+        frp = self.latest_for(constants.GROUP_FRP_TRAFFIC, nid)
         tunnels = frp.get("tunnels", [])
         serverinfo = frp.get("serverinfo") or {}
-        ts_p = self.latest.get(constants.GROUP_TS_LATENCY, {})
+        ts_p = self.latest_for(constants.GROUP_TS_LATENCY, nid)
         devices = ts_p.get("devices", [])
-        sys_p = self.latest.get(constants.GROUP_SYSTEM, {})
-        cert_p = self.latest.get(constants.GROUP_CERT_DAYS, {})
+        sys_p = self.latest_for(constants.GROUP_SYSTEM, nid)
+        cert_p = self.latest_for(constants.GROUP_CERT_DAYS, nid)
         certs = cert_p.get("certs", [])
-        hs_p = self.latest.get(constants.GROUP_HEADSCALE, {})
-        net_p = self.latest.get(constants.GROUP_NETWORK, {})
+        hs_p = self.latest_for(constants.GROUP_HEADSCALE, nid)
+        net_p = self.latest_for(constants.GROUP_NETWORK, nid)
         probes = net_p.get("probes", [])
-        grm_p = self.latest.get(constants.GROUP_GRM, {})
-        lab_p = self.latest.get(constants.GROUP_LAB, {})
-        updated = max(self.latest_ts.values(), default=None)
+        grm_p = self.latest_for(constants.GROUP_GRM, nid)
+        lab_p = self.latest_for(constants.GROUP_LAB, nid)
+        node_ts = [v for (n, _), v in self.latest_ts.items() if n == nid]
+        updated = max(node_ts, default=None)
         return {
             "mock": config.MOCK,
             "mode": "snapshot" if config.SNAPSHOT else ("mock" if config.MOCK else "live"),

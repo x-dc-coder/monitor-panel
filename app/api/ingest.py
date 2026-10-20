@@ -15,7 +15,7 @@ import logging
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 
-from app import config
+from app import config, db
 from app.api import get_aggregator, ok
 
 log = logging.getLogger(__name__)
@@ -26,6 +26,12 @@ def _bearer(authorization: str | None = Header(None)) -> None:
     """应用层 token 校验（nginx Basic Auth 豁免后的唯一防线）。"""
     if not config.INGEST_ENABLED:
         return
+    # 空 token 会使 expected="Bearer " 匹配空 Bearer 头，必须先拒绝
+    if not config.INGEST_TOKEN:
+        raise HTTPException(
+            status_code=401,
+            detail="ingest token not configured",
+            headers={"WWW-Authenticate": "Bearer"})
     expected = f"Bearer {config.INGEST_TOKEN}"
     if not hmac.compare_digest(authorization or "", expected):
         raise HTTPException(
@@ -45,10 +51,32 @@ async def ingest(body: dict):
     results = body.get("results") if isinstance(body, dict) else None
     if not isinstance(results, list):
         raise HTTPException(status_code=400, detail="expected {results: [...]}")
-    n = 0
+
+    # 批前校验：校验任一 item 的 node_id 是否已注册
+    unknown_nodes: set[str] = set()
+    valid_items: list[dict] = []
     for item in results:
         if not isinstance(item, dict) or "node_id" not in item or "group" not in item:
             continue
+        nid = item["node_id"]
+        if not db.node_exists(nid):
+            unknown_nodes.add(nid)
+        else:
+            valid_items.append(item)
+
+    if unknown_nodes:
+        registered_nodes = [n["id"] for n in db.get_nodes()]
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "unknown node_id",
+                "rejected": sorted(unknown_nodes),
+                "registered": registered_nodes,
+            },
+        )
+
+    n = 0
+    for item in valid_items:
         from app.collectors.base import CollectorResult, Metric
         r = CollectorResult(node_id=item["node_id"], group=item["group"])
         for m in item.get("metrics", []):
@@ -56,6 +84,8 @@ async def ingest(body: dict):
         if item.get("payload"):
             r.payload = item["payload"]
         await agg.ingest(r)
+        # 聚合成功后刷新心跳：失败不得谎报节点在线
+        db.touch_node(item["node_id"])
         n += 1
     log.info("ingest: %d result(s) from remote node", n)
     return ok({"accepted": n})

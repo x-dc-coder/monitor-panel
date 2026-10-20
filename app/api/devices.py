@@ -20,11 +20,21 @@ router = APIRouter()
 
 _last_manual_ping: dict[str, float] = {}  # device_id → monotonic
 
+_MANUAL_PING_TTL_S = 3600.0  # 限流记录保留窗口（超过后无意义）
+
+
+def _remember_manual_ping(device_id: str, now: float) -> None:
+    """记录限流时间戳，并顺手淘汰超窗口的旧键（字典量级极小，无需 LRU）。"""
+    _last_manual_ping[device_id] = now
+    stale = [k for k, ts in _last_manual_ping.items() if now - ts > _MANUAL_PING_TTL_S]
+    for k in stale:
+        del _last_manual_ping[k]
+
 
 @router.get("/devices")
 async def devices(node: str | None = None):
     agg = get_aggregator()
-    ts_p = agg.latest.get(constants.GROUP_TS_LATENCY, {})
+    ts_p = agg.latest_for(constants.GROUP_TS_LATENCY, node)
     pings = ts_p.get("pings", {})
     rows = db.get_devices(node)
     out = []
@@ -107,11 +117,11 @@ async def ping_device(device_id: str):
         import hashlib
         seed = int(hashlib.md5(device_id.encode()).hexdigest()[:6], 16)
         latency = 15 + seed % 80
-        _last_manual_ping[device_id] = now
+        _remember_manual_ping(device_id, now)
         return ok({"device_id": device_id, "tailscale_ip": ip,
                    "latency_ms": float(latency), "path": "derp",
                    "loss_percent": 0.0, "timed_out": False, "mock": True})
-    _last_manual_ping[device_id] = now
+    _remember_manual_ping(device_id, now)
     try:
         ping = await collector.ping_device(device_id, ip)
     except CollectorError as exc:

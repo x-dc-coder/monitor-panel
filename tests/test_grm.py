@@ -143,6 +143,27 @@ def test_grm_db_degraded_keeps_rows(tmp_path):
     db.close()
 
 
+def test_on_grm_prunes_deleted_repos(tmp_path):
+    """非降级轮次：grm 删除仓库后 update_items 与 grm_repos 同步 prune（P1-3）。"""
+    db.close()
+    db.init_db(str(tmp_path / "t.db"))
+    from app.services.aggregator import Aggregator
+    agg = Aggregator()
+    rows = [{"repo_id": f"github:x/r{i}", "owner_slug": f"x/r{i}",
+             "latest_tag": "v1", "is_new": 0} for i in range(3)]
+    _run(agg.ingest(CollectorResult(
+        node_id="cloud-1", group=constants.GROUP_GRM, payload={"repos": rows})))
+    assert len(db.get_update_items()) == 3
+    assert len(db.get_grm_repos()) == 3
+    # 次轮 grm 侧只余 1 仓库（非降级）→ 两个表同步收缩
+    _run(agg.ingest(CollectorResult(
+        node_id="cloud-1", group=constants.GROUP_GRM,
+        payload={"repos": rows[:1]})))
+    assert [r["item_key"] for r in db.get_update_items()] == ["github:x/r0"]
+    assert [r["repo_id"] for r in db.get_grm_repos()] == ["github:x/r0"]
+    db.close()
+
+
 def test_grm_api_contract(client, ingest_all):
     """/api/grm 契约：信封 + 仓库卡片字段 + summary + base_url。"""
     from app.api import set_aggregator

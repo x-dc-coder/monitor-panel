@@ -1,4 +1,7 @@
 """aggregator 告警/修复逻辑测试（2026-08-15 审查回归）。"""
+import asyncio
+import time
+
 import pytest
 
 from app import constants, db
@@ -43,4 +46,36 @@ def test_frp_link_alert_and_resolve(tmp_path):
     agg._on_frp_link(_frp_link_result(
         {"dev-a": {"latency_ms": 50, "packet_loss_percent": 0.0}}), 1.0)
     assert db.count_unresolved_alerts() == 0, "恢复后应 resolve"
+    db.close()
+
+
+def test_ingest_two_tuple_metric(tmp_path):
+    """2 元组 (name, value) metrics 不再 IndexError，落库 ts 回退为 now。"""
+    db.close()
+    db.init_db(str(tmp_path / "t.db"))
+    r = CollectorResult(node_id="cloud-1", group=constants.GROUP_SYSTEM)
+    r.metrics = [("cpu_percent", 12.5)]  # 2 元组形态（无 ts）
+    now = time.time()
+    asyncio.run(_agg().ingest(r))
+    msg = "2 元组指标应落库且 ts 取 now"
+    assert db.query_sample_range("cpu_percent")[2] == 1, msg
+    lo, hi, _ = db.query_sample_range("cpu_percent")
+    assert hi is not None, msg
+    assert abs(hi - now) < 5, msg
+    db.close()
+
+
+def test_cert_alert_days_none(tmp_path):
+    """status=crit 且 days_left=None：不得 TypeError，产生 CRIT 告警。"""
+    db.close()
+    db.init_db(str(tmp_path / "t.db"))
+    r = CollectorResult(node_id="cloud-1", group=constants.GROUP_CERT_DAYS)
+    r.payload = {"certs": [{"domain": "x", "status": constants.LEVEL_CRIT,
+                            "days_left": None}]}
+    _agg()._on_cert_days(r, 0.0)  # 不抛
+    alerts = db.get_alerts(unresolved_only=True)
+    cert_alerts = [a for a in alerts if a["source"] == "cert:x"]
+    assert cert_alerts, "days=None 仍应产生告警"
+    assert cert_alerts[0]["level"] == constants.LEVEL_CRIT
+    assert "None" not in cert_alerts[0]["message"]
     db.close()

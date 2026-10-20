@@ -78,6 +78,8 @@ CREATE TABLE IF NOT EXISTS samples (
 );
 CREATE INDEX IF NOT EXISTS idx_samples_lookup
   ON samples(metric_group, metric_name, ts);
+CREATE INDEX IF NOT EXISTS idx_samples_node
+  ON samples(node_id, metric_group, metric_name, ts);
 
 CREATE TABLE IF NOT EXISTS alerts (
   id       INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -246,6 +248,13 @@ def touch_node(node_id: str) -> None:
         conn.commit()
 
 
+def node_exists(node_id: str) -> bool:
+    conn = _cursor()
+    with _lock:
+        row = conn.execute("SELECT 1 FROM monitor_nodes WHERE id=?", (node_id,)).fetchone()
+        return row is not None
+
+
 def get_nodes() -> list[dict]:
     conn = _cursor()
     with _lock:
@@ -275,12 +284,16 @@ def insert_samples(node_id: str, group: str,
 
 
 def query_history(metric_name: str, since_ts: float, bucket_s: float,
-                  group: str | None = None) -> list[dict]:
+                  group: str | None = None,
+                  node_id: str | None = None) -> list[dict]:
     """按桶降采样：AVG(value)，返回桶起点时间戳。"""
     conn = _cursor()
     sql = ("SELECT CAST((ts - ?) / ? AS INTEGER) AS b, AVG(value) AS v, MAX(ts) AS ts "
            "FROM samples WHERE metric_name=? AND ts >= ? ")
     params: list = [since_ts, bucket_s, metric_name, since_ts]
+    if node_id is not None:
+        sql += "AND node_id=? "
+        params.append(node_id)
     if group:
         sql += "AND metric_group=? "
         params.append(group)
@@ -291,15 +304,24 @@ def query_history(metric_name: str, since_ts: float, bucket_s: float,
              "ts_max": row["ts"]} for row in rows]
 
 
-def query_latest_by_group(group: str, limit_metrics: int = 200) -> dict[str, float]:
+def query_latest_by_group(group: str, limit_metrics: int = 200,
+                          node_id: str | None = None) -> dict[str, float]:
     """每个 metric_name 取最新一条（MAX(id)）。"""
     conn = _cursor()
-    sql = ("SELECT s.metric_name, s.value, s.ts FROM samples s "
-           "JOIN (SELECT metric_name, MAX(id) AS mid FROM samples "
-           "      WHERE metric_group=? GROUP BY metric_name) t "
-           "ON s.id = t.mid ORDER BY s.metric_name LIMIT ?")
+    if node_id is not None:
+        sql = ("SELECT s.metric_name, s.value, s.ts FROM samples s "
+               "JOIN (SELECT metric_name, MAX(id) AS mid FROM samples "
+               "      WHERE metric_group=? AND node_id=? GROUP BY metric_name) t "
+               "ON s.id = t.mid WHERE s.node_id=? ORDER BY s.metric_name LIMIT ?")
+        params = (group, node_id, node_id, limit_metrics)
+    else:
+        sql = ("SELECT s.metric_name, s.value, s.ts FROM samples s "
+               "JOIN (SELECT metric_name, MAX(id) AS mid FROM samples "
+               "      WHERE metric_group=? GROUP BY metric_name) t "
+               "ON s.id = t.mid ORDER BY s.metric_name LIMIT ?")
+        params = (group, limit_metrics)
     with _lock:
-        rows = conn.execute(sql, (group, limit_metrics)).fetchall()
+        rows = conn.execute(sql, params).fetchall()
     return {r["metric_name"]: float(r["value"]) for r in rows}
 
 
@@ -445,7 +467,10 @@ def upsert_services(node_id: str, rows: list[dict]) -> None:
             "auto_name=excluded.auto_name, protocol=excluded.protocol, url=excluded.url, "
             "http_status=excluded.http_status, latency_ms=excluded.latency_ms, "
             "status=excluded.status, missing_rounds=excluded.missing_rounds, "
-            "source=excluded.source, enabled=excluded.enabled, "
+            "source=CASE WHEN services.source='manual' THEN 'manual' "
+            "ELSE excluded.source END, "
+            "enabled=CASE WHEN services.source='manual' THEN services.enabled "
+            "ELSE excluded.enabled END, "
             "last_seen_ts=excluded.last_seen_ts, updated_ts=excluded.updated_ts",
             rows)
         conn.commit()

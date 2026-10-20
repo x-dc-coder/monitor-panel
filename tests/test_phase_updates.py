@@ -204,6 +204,26 @@ def test_updates_api(client, ingest_all):
     assert len(r2.json()["data"]["items"]) == d["summary"]["total"]
 
 
+def test_updates_api_pins_and_summary(client):
+    """P1-4：/api/updates 从 grm_repos 读侧合并 is_pinned/summary（不加列）。"""
+    db.upsert_grm_repos("cloud-1", [
+        {"repo_id": "github:pinned/a", "owner_slug": "pinned/a",
+         "is_pinned": 1, "readme_summary": "置顶仓库摘要"},
+    ])
+    db.upsert_update_items("cloud-1", [
+        {"provider": "grm", "item_key": "github:pinned/a", "title": "pinned/a"},
+        {"provider": "grm", "item_key": "github:plain/b", "title": "plain/b"},
+    ])
+    r = client.get("/api/updates")
+    assert r.status_code == 200
+    by_key = {it["item_key"]: it for it in r.json()["data"]["items"]}
+    assert by_key["github:pinned/a"]["is_pinned"] is True
+    assert by_key["github:pinned/a"]["summary"] == "置顶仓库摘要"
+    # 无对应 grm 行 → False/None
+    assert by_key["github:plain/b"]["is_pinned"] is False
+    assert by_key["github:plain/b"]["summary"] is None
+
+
 def test_grm_provider_fetch_and_rows_to_items():
     from app.collectors.updates import GrmProvider, PROVIDERS, get_provider
     from app.collectors.updates.grm import rows_to_items

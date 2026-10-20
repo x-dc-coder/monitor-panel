@@ -12,7 +12,7 @@ router = APIRouter()
 @router.get("/frp")
 async def frp(node: str | None = None):
     agg = get_aggregator()
-    payload = agg.latest.get(constants.GROUP_FRP_TRAFFIC, {})
+    payload = agg.latest_for(constants.GROUP_FRP_TRAFFIC, node)
     tunnels = payload.get("tunnels") or []
     serverinfo = payload.get("serverinfo")
     if not tunnels:

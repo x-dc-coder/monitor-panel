@@ -43,6 +43,24 @@ def test_history_downsample():
     assert all("value" in p and "ts" in p for p in points)
 
 
+def test_query_history_node_filtering():
+    ts = time.time()
+    db.insert_samples("cloud-1", "system", [("cpu_percent", 10.0, ts)])
+    db.insert_samples("cloud-2", "system", [("cpu_percent", 50.0, ts)])
+
+    p_default = db.query_history("cpu_percent", ts - 1, bucket_s=10.0, group="system")
+    assert len(p_default) == 1
+    assert p_default[0]["value"] == 30.0  # node_id=None 时全部聚合
+
+    p_c1 = db.query_history("cpu_percent", ts - 1, bucket_s=10.0, group="system", node_id="cloud-1")
+    assert len(p_c1) == 1
+    assert p_c1[0]["value"] == 10.0
+
+    p_c2 = db.query_history("cpu_percent", ts - 1, bucket_s=10.0, group="system", node_id="cloud-2")
+    assert len(p_c2) == 1
+    assert p_c2[0]["value"] == 50.0
+
+
 def test_upsert_devices_and_tunnels():
     db.upsert_devices("cloud-1", [{"device_id": "d1", "name": "dev1", "online": 1}])
     db.upsert_devices("cloud-1", [{"device_id": "d1", "name": "dev1b", "online": 0}])

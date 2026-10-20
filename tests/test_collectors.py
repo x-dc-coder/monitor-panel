@@ -65,6 +65,75 @@ def test_certs_mock_status(registry):
     assert "warn" in statuses and "crit" in statuses
 
 
+def test_certs_gather_isolates_failure(monkeypatch):
+    """单域名 _probe_tls 抛非预期异常（ValueError）不得废掉整轮。"""
+    from app import config
+    from app.collectors import certs as certs_mod
+
+    async def fake_discover(self):
+        return []
+
+    async def fake_read(self, domain):
+        return None
+
+    async def fake_probe(self, domain):
+        if domain == "bad.example":
+            raise ValueError("boom")
+        return {"domain": domain, "days_left": 30.0, "status": "ok",
+                "source": "tls"}
+
+    monkeypatch.setattr(config, "CERT_DOMAINS", [])
+    monkeypatch.setattr(certs_mod, "_CORE_DOMAINS", ["ok.example", "bad.example"])
+    monkeypatch.setattr(certs_mod.CertsCollector, "_nginx_discover", fake_discover)
+    monkeypatch.setattr(certs_mod.CertsCollector, "_read_cert", fake_read)
+    monkeypatch.setattr(certs_mod.CertsCollector, "_probe_tls", fake_probe)
+
+    result = _run(certs_mod.CertsCollector(mock=False)._run_real())
+    certs = {c["domain"]: c for c in result.payload["certs"]}
+    assert certs["ok.example"]["days_left"] == 30.0
+    assert certs["bad.example"].get("error"), "失败域名应走既有探测失败路径"
+
+
+def test_certs_gather_isolates_child_cancel(monkeypatch):
+    """子任务被单独 cancel（CancelledError 为 BaseException）不得废掉整轮。"""
+    from app import config
+    from app.collectors import certs as certs_mod
+
+    async def fake_discover(self):
+        return []
+
+    async def fake_read(self, domain):
+        if domain == "bad.example":
+            return {"domain": domain, "days_left": 11.0, "status": "warn",
+                    "source": "file"}
+        return None
+
+    async def fake_probe(self, domain):
+        if domain == "bad.example":
+            asyncio.get_running_loop().call_soon(asyncio.current_task().cancel)
+            await asyncio.sleep(30)
+        return {"domain": domain, "days_left": 30.0, "status": "ok",
+                "source": "tls"}
+
+    monkeypatch.setattr(config, "CERT_DOMAINS", [])
+    monkeypatch.setattr(certs_mod, "_CORE_DOMAINS", ["ok.example", "bad.example"])
+    monkeypatch.setattr(certs_mod.CertsCollector, "_nginx_discover", fake_discover)
+    monkeypatch.setattr(certs_mod.CertsCollector, "_read_cert", fake_read)
+    monkeypatch.setattr(certs_mod.CertsCollector, "_probe_tls", fake_probe)
+
+    result = _run(certs_mod.CertsCollector(mock=False)._run_real())
+    certs = {c["domain"]: c for c in result.payload["certs"]}
+    assert all(isinstance(c, dict) for c in result.payload["certs"])
+    assert certs["ok.example"]["days_left"] == 30.0
+    assert certs["ok.example"]["source"] == "tls"
+    # 取消被归一化为 None → 触发本地文件回退
+    assert certs["bad.example"]["days_left"] == 11.0
+    assert certs["bad.example"]["source"] == "file"
+    names = {m.name for m in result.metrics}
+    assert "days_left.ok.example" in names
+    assert "days_left.bad.example" in names
+
+
 def test_sanitize_applied_to_status():
     from app.collectors.base import sanitize
     raw = {"Peer": {"a": {"HostName": "x", "node_key": "nk:1"}}}
@@ -115,3 +184,53 @@ def test_norm_device_uses_hashed_id():
                                           "TailscaleIPs": ["100.64.0.9"], "Online": True})
     assert dev["device_id"] != "nSECRETNODEID123"
     assert len(dev["device_id"]) == 8
+
+
+# ---------------- services 探测：单次读协议识别（SSH banner / HTTP） ----------------
+
+def _probe_against_mock(handler, monkeypatch):
+    """起本地 mock TCP 服务，用真实端口跑一次 ServicesCollector._probe。"""
+    from app import config
+    from app.collectors.services import ServicesCollector
+
+    monkeypatch.setattr(config, "SERVICES_CONNECT_TIMEOUT", 2.0)
+    monkeypatch.setattr(config, "SERVICES_HTTP_TIMEOUT", 2.0)
+    col = ServicesCollector(mock=False)
+    target = {"device_id": "local", "device_name": "localhost",
+              "tailscale_ip": "127.0.0.1"}
+
+    async def scenario():
+        server = await asyncio.start_server(handler, "127.0.0.1", 0)
+        port = server.sockets[0].getsockname()[1]
+        async with server:
+            return await col._probe(target, port)
+
+    return asyncio.run(scenario())
+
+
+def test_probe_detects_ssh_banner(monkeypatch):
+    """sshd 主动 banner 必须被首读识别为 ssh（旧实现二次读永远等不到数据）。"""
+    async def handler(reader, writer):
+        writer.write(b"SSH-2.0-OpenSSH_9.6\r\n")
+        await writer.drain()
+        writer.close()
+
+    row = _probe_against_mock(handler, monkeypatch)
+    assert row is not None
+    assert row["protocol"] == "ssh"
+    assert row["port"] > 0
+
+
+def test_probe_http_single_read(monkeypatch):
+    """HTTP 响应仍按首读判定（重构后不能回归）。"""
+    async def handler(reader, writer):
+        await reader.read(1024)
+        writer.write(b"HTTP/1.1 200 OK\r\nServer: mock-srv\r\n"
+                     b"Content-Type: text/html\r\n\r\n<title>MOCK</title>")
+        await writer.drain()
+        writer.close()
+
+    row = _probe_against_mock(handler, monkeypatch)
+    assert row is not None
+    assert row["protocol"] == "http"
+    assert row["http_status"] == 200
