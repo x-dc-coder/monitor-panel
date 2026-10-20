@@ -8,7 +8,8 @@
 #   ./scripts/deploy.sh                      # 部署当前代码
 #   ./scripts/deploy.sh --rollback           # 回滚到上一 release
 #   ./scripts/deploy.sh --host dc-sy --remote-dir /opt/monitor-panel
-# 注意: 健康检查走本机 127.0.0.1（N2：绕开 nginx Basic Auth）
+# 注意: 健康检查走本机 127.0.0.1（N2：绕开 nginx/SSO 门禁）
+# 部署机 ubuntu 用户所需 sudoers 白名单见 deploy/sudoers.deploy（monitor-deploy-ctl）
 # ============================================================
 set -euo pipefail
 
@@ -54,7 +55,9 @@ switch_and_restart() {
 
 if [ "$ROLLBACK" = "1" ]; then
   echo "=== 回滚模式 ==="
-  PREV="$(ssh "${SSH_OPTS[@]}" "$HOST" "ls -1d '$REMOTE_DIR'/releases/*/ 2>/dev/null | grep -vxF \"\$(readlink -f '$CURRENT')/\" | tail -1")"
+  # `|| true` 在远端 shell 内：grep 无匹配时 pipefail 不会冒到远端退出码，
+  # 空结果交由下方 -z 判断走明确的 exit 1（否则 set -e 静默退出）
+  PREV="$(ssh "${SSH_OPTS[@]}" "$HOST" "ls -1d '$REMOTE_DIR'/releases/*/ 2>/dev/null | grep -vxF \"\$(readlink -f '$CURRENT')/\" | tail -1 || true")"
   if [ -z "$PREV" ]; then
     echo "✗ 没有可回滚的 release"; exit 1
   fi
@@ -102,7 +105,7 @@ if switch_and_restart "$RELEASE"; then
     ls -1d */ 2>/dev/null | sort -r | tail -n +6 | while read -r r; do \
       p=\$(cd \"\$r\" && pwd); [ \"\$p\" = \"\$cur_real\" ] && continue; \
       sudo -n monitor-deploy-ctl chown ubuntu:ubuntu \"\$p\" && rm -rf \"\$r\" && echo \"  purged \$r\"; done; true"
-  echo "  公网验证: curl -fsS -u <user> https://monitor.dc-sy.cn/api/healthz"
+  echo "  公网验证: curl -fsS https://monitor.dc-sy.cn/api/healthz"
   echo "  回滚:     $0 --rollback --host $HOST --remote-dir $REMOTE_DIR"
 else
   echo "✗ 新版本健康检查失败，自动回滚…"

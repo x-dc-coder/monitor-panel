@@ -1,0 +1,9 @@
+# ubuntu（部署机用户）sudoers NOPASSWD 白名单（审查 P2-20）
+# 安装: sudo install -m 440 -o root -g root deploy/sudoers.deploy /etc/sudoers.d/monitor-deploy
+# 校验: sudo visudo -c -f deploy/sudoers.deploy
+#
+# 本文件是仓库侧文档化模板：服务器侧已另行安装本规则（2026-10-20 核实），
+# 路径以服务器实测为准（/usr/local/sbin/monitor-deploy-ctl）。
+# monitor-deploy-ctl 仅提供 chown/chmod 白名单语义：受限地修正 release/backups
+# 属主，不提供任意命令执行。scripts/deploy.sh 以 `sudo -n monitor-deploy-ctl` 调用。
+ubuntu ALL=(root) NOPASSWD: /usr/local/sbin/monitor-deploy-ctl
