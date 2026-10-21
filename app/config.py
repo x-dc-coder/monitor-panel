@@ -195,6 +195,9 @@ SERVICES_EXTRA_PORTS = _env_json("MONITOR_SERVICES_EXTRA_PORTS", {
 })
 # 服务公网直达地址：{"ip:port": "https://..."}，面板链接用它；未配置的内网/回环地址仅展示标记
 SERVICES_PUBLIC_URLS = _env_json("MONITOR_SERVICES_PUBLIC_URLS", {})
+# 探测范围声明文件（terraform 生成，见 linux-ops/terraform/probe_scope.tf）：
+# 由云防火墙/安全组声明集推导「公网视角」端口范围；文件不存在时静默跳过。
+SERVICES_SCOPE_FILE = _env("MONITOR_SERVICES_SCOPE_FILE", "")
 SERVICES_SCAN_BATCH = _env_int("MONITOR_SERVICES_SCAN_BATCH", 256)   # 每轮每设备扫描端口数（分片）
 SERVICES_CONNECT_TIMEOUT = _env_float("MONITOR_SERVICES_CONNECT_TIMEOUT", 1.5)
 SERVICES_HTTP_TIMEOUT = _env_float("MONITOR_SERVICES_HTTP_TIMEOUT", 2.0)

@@ -1,9 +1,11 @@
 """服务台账（issue #2 方案 C）测试：采集器 mock / db upsert / 聚合持久化 / API 契约。"""
 import asyncio
+import json
+import time
 
 import pytest
 
-from app import constants, db
+from app import config, constants, db
 from app.collectors import build_registry
 from app.collectors.base import CollectorResult
 
@@ -380,3 +382,27 @@ def test_services_min_age_suppression(tmp_path):
     _run(agg.ingest(r))
     assert db.count_unresolved_alerts() == 0
     db.close()
+
+
+def test_scope_file_ports_are_merged(tmp_path, monkeypatch):
+    """terraform probe_scope.json 的 public_tcp 并入探测集合（含端口段展开）。"""
+    from app.collectors.services import ServicesCollector
+    scope = {
+        "servers": {
+            "cloud": {"host": "124.221.190.237",
+                      "public_tcp": ["22", "443", "20000-20002"]},
+        }
+    }
+    f = tmp_path / "probe_scope.json"
+    f.write_text(json.dumps(scope), encoding="utf-8")
+    monkeypatch.setattr(config, "SERVICES_SCOPE_FILE", str(f))
+    col = ServicesCollector()
+    assert col._scope_ports("124.221.190.237") == [22, 443, 20000, 20001, 20002]
+    assert col._scope_ports("10.0.0.9") == []
+    # 文件 mtime 未变时走缓存；改变内容后应重新加载
+    f.write_text(json.dumps({"servers": {"x": {"host": "124.221.190.237",
+                                               "public_tcp": ["8080"]}}}),
+                 encoding="utf-8")
+    import os
+    os.utime(f, (time.time() + 5, time.time() + 5))
+    assert col._scope_ports("124.221.190.237") == [8080]

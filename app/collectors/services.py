@@ -12,7 +12,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import os
 import re
 import time
 
@@ -78,6 +80,48 @@ class ServicesCollector(Collector):
                                 "tailscale_ip": d["tailscale_ip"]})
         return targets
 
+    def _scope_ports(self, ip: str) -> list[int]:
+        """从 terraform probe_scope.json 取该 IP 的公网声明端口（按 mtime 缓存）。
+
+        格式：{"servers": {"cloud": {"host": "...", "public_tcp": ["22", "20000-20099"]}}}
+        端口段 "20000-20099" 展开为区间。文件缺失/解析失败静默跳过（不影响现有探测）。
+        """
+        path = config.SERVICES_SCOPE_FILE
+        if not path:
+            return []
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            return []
+        if getattr(self, "_scope_cache_mtime", None) != mtime:
+            try:
+                with open(path, encoding="utf-8") as fh:
+                    data = json.load(fh)
+                by_host: dict[str, list[int]] = {}
+                for srv in (data.get("servers") or {}).values():
+                    host = (srv or {}).get("host")
+                    if not host:
+                        continue
+                    ports: list[int] = []
+                    for item in (srv.get("public_tcp") or []):
+                        txt = str(item)
+                        if "-" in txt:
+                            lo, _, hi = txt.partition("-")
+                            try:
+                                ports.extend(range(int(lo), int(hi) + 1))
+                            except ValueError:
+                                continue
+                        elif txt.isdigit():
+                            ports.append(int(txt))
+                    by_host[host] = sorted(set(ports))
+                self._scope_cache = by_host
+                self._scope_cache_mtime = mtime
+            except (OSError, ValueError, json.JSONDecodeError):
+                log.warning("services: scope 文件解析失败 %s", path, exc_info=True)
+                self._scope_cache = {}
+                self._scope_cache_mtime = mtime
+        return (getattr(self, "_scope_cache", {}) or {}).get(ip, [])
+
     def _extra_config(self, ip: str) -> dict[int, dict]:
         """该设备的 extra 端口配置：{port: options}。兼容 list 与 dict 两种形态。
 
@@ -117,7 +161,10 @@ class ServicesCollector(Collector):
                  if did == device_id and port not in chunk]
         extra = [p for p in self._extra_ports_for(target["tailscale_ip"])
                  if p not in chunk and p not in known]
-        return chunk + known + extra
+        # terraform 声明集（公网视角）：已放行端口也纳入必探，避免"声明了却不探"
+        scope = [p for p in self._scope_ports(target["tailscale_ip"])
+                 if p not in chunk and p not in known and p not in extra]
+        return chunk + known + extra + scope
 
     def _advance_cursor(self) -> None:
         self._cursor += max(1, config.SERVICES_SCAN_BATCH)
