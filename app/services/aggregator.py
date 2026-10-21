@@ -400,7 +400,10 @@ class Aggregator:
                 "protocol": proto,
                 "name": None,
                 "auto_name": prev.get("auto_name") or f"{result.node_id}:{port}",
-                "status": prev.get("status") or "open",
+                # UDP 无连接语义：agent 只能证明"在监听"，不能证明"可达"，
+                # 故 status=listen（前端显示"监听中"），不参与可达性告警。
+                "status": ("listen" if proto == "udp"
+                           else (prev.get("status") or "open")),
                 "enabled": prev.get("enabled", 1),
                 "source": "agent",
                 "first_seen_ts": prev.get("first_seen_ts") or ts,

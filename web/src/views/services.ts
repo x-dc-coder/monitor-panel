@@ -46,6 +46,7 @@ function linkCell(r: ServiceRow): string {
 
 function statusTxt(r: ServiceRow): string {
   if (r.status === "open") return st("ok", "在线");
+  if (r.status === "listen") return st("ok", "监听中");
   if (r.status === "closed") return st("crit", "离线");
   return st("off", "未知");
 }

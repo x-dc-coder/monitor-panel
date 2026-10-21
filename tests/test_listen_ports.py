@@ -217,3 +217,22 @@ def test_udp_and_tcp_same_port_coexist(client, monkeypatch):
     assert len(rows) == 3, f"期望 3 行（53/tcp、53/udp、3478/udp），实际 {rows}"
     protos = {(x["port"], x["protocol"]) for x in rows}
     assert (53, "tcp") in protos and (53, "udp") in protos and (3478, "udp") in protos
+
+
+def test_udp_rows_use_listen_status(client, monkeypatch):
+    """UDP 行 status=listen（仅监听，不宣称可达）；TCP 行仍为 open。"""
+    monkeypatch.setattr(config, "INGEST_ENABLED", True)
+    monkeypatch.setattr(config, "INGEST_TOKEN", "test-token")
+    db.upsert_devices("cloud-1", [{"device_id": "ts-n2", "name": "n2",
+                                   "os": "linux", "online": True}])
+    body = {"results": [{"node_id": "n2", "group": "listen_ports",
+                         "metrics": [{"name": "listening_count", "value": 2}],
+                         "payload": {"ports": [
+                             {"port": 22, "proto": "tcp", "addr": "0.0.0.0"},
+                             {"port": 3478, "proto": "udp", "addr": "*"}]}}]}
+    r = client.post("/api/ingest", json=body,
+                    headers={"Authorization": "Bearer test-token"})
+    assert r.status_code == 200, r.text
+    rows = {x["port"]: x for x in db.get_services(node_id="n2")}
+    assert rows[22]["status"] == "open"
+    assert rows[3478]["status"] == "listen", "UDP 行应为 listen 状态"
