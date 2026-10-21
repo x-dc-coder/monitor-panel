@@ -52,7 +52,7 @@ export async function api<T>(path: string, opts?: RequestInit): Promise<T> {
     throw new ApiError("非 JSON 响应 (HTTP " + r.status + ")", r.status);
   }
   if (!r.ok) {
-    const detail = (j as unknown as { detail?: string }).detail || j.error || ("HTTP " + r.status);
+    const detail = j.error || ("HTTP " + r.status);
     throw new ApiError(detail, r.status);
   }
   if (!j.ok) {

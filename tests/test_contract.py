@@ -62,7 +62,8 @@ def test_error_envelope_uniform(client, seeded, monkeypatch):
 
 
 def test_openapi_coverage():
-    """除 healthz / ingest / auth/* 外，每个端点 200 必须引用具名 schema。"""
+    """除 healthz / ingest / auth/* 外，每个端点 200 必须引用具名 schema，
+    且 4XX 必须引用统一 ErrorEnvelope。"""
     from app.main import app
 
     skip = {"/api/healthz", "/api/ingest"}
@@ -72,10 +73,15 @@ def test_openapi_coverage():
         for method, op in item.items():
             if method not in ("get", "post", "put", "patch", "delete"):
                 continue
-            content = op.get("responses", {}).get("200", {}).get(
-                "content", {}).get("application/json", {})
-            schema = content.get("schema", {})
+            responses = op.get("responses", {})
+            schema = responses.get("200", {}).get(
+                "content", {}).get("application/json", {}).get("schema", {})
             assert "$ref" in schema, f"{method.upper()} {path} 缺少具名 200 schema: {schema}"
+            err_schema = responses.get("4XX", {}).get(
+                "content", {}).get("application/json", {}).get("schema", {})
+            ref = err_schema.get("$ref", "")
+            assert ref.endswith("/ErrorEnvelope"), \
+                f"{method.upper()} {path} 4XX 未引用 ErrorEnvelope: {err_schema}"
 
 
 _ENVELOPE_ENDPOINTS = [

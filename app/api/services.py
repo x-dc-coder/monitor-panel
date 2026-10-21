@@ -9,13 +9,14 @@ from fastapi import APIRouter
 
 from app import config, constants, db
 from app.api import ok
-from app.api.schemas import ServicesEnvelope
+from app.api.schemas import ERROR_RESPONSES, ServicesEnvelope
 
 router = APIRouter()
 
 
 @router.get("/services", responses={200: {"model": ServicesEnvelope,
-                                           "description": "服务台账"}})
+                                           "description": "服务台账"},
+                                    **ERROR_RESPONSES})
 async def services(node: str | None = None):
     rows = db.get_services(node_id=node or config.NODE_ID)
     out = []

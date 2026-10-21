@@ -2,7 +2,7 @@
 import { fmtMs, nowTime } from "../fmt";
 import { S } from "../state";
 import { api } from "../api";
-import type { DeviceRow, PingResult } from "../types";
+import type { DeviceRow, PingData } from "../types";
 import { esc, pageHead, st, statusLevel, win } from "../ui";
 import { table, type TableDef } from "../table";
 
@@ -127,7 +127,7 @@ export function bindPing(): void {
         '</span> <span class="ps">$</span> <span class="out">sudo tailscale ping ' + esc(ip) + "</span></div>";
       S.pingLog = cmdLine;
       out.innerHTML = cmdLine;
-      api<PingResult>("/api/devices/" + encodeURIComponent(id) + "/ping", { method: "POST" })
+      api<PingData>("/api/devices/" + encodeURIComponent(id) + "/ping", { method: "POST" })
         .then((d) => {
           const okLine = '<div class="ln"><span class="ok2">pong from ' + esc(n) + " (" + esc(ip) +
             ") via " + esc(d.path === "direct" ? "direct" : "DERP(headscale)") + " in " +

@@ -559,6 +559,18 @@ export interface components {
             /** Ts */
             ts: number;
         };
+        /**
+         * ErrorEnvelope
+         * @description 统一错误信封（main.py 全局 handler 的错误形态）。
+         */
+        ErrorEnvelope: {
+            /** Ok */
+            ok: boolean;
+            /** Error */
+            error: string;
+            /** Ts */
+            ts: number;
+        };
         /** FrpData */
         FrpData: {
             /** Tunnels */
@@ -685,11 +697,6 @@ export interface components {
             first_seen_ts: number | null;
             /** Updated Ts */
             updated_ts: number | null;
-        };
-        /** HTTPValidationError */
-        HTTPValidationError: {
-            /** Detail */
-            detail?: components["schemas"]["ValidationError"][];
         };
         /** HeadscaleOverview */
         HeadscaleOverview: {
@@ -1034,19 +1041,6 @@ export interface components {
             /** Ts */
             ts?: number | null;
         };
-        /** ValidationError */
-        ValidationError: {
-            /** Location */
-            loc: (string | number)[];
-            /** Message */
-            msg: string;
-            /** Error Type */
-            type: string;
-            /** Input */
-            input?: unknown;
-            /** Context */
-            ctx?: Record<string, never>;
-        };
     };
     responses: never;
     parameters: never;
@@ -1134,6 +1128,15 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope_MeData_"];
                 };
             };
+            /** @description 统一错误信封 {ok:false, error, ts} */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
         };
     };
     overview_api_overview_get: {
@@ -1156,13 +1159,13 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope_OverviewData_"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description 统一错误信封 {ok:false, error, ts} */
+            "4XX": {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -1188,13 +1191,13 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope_AlertsData_"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description 统一错误信封 {ok:false, error, ts} */
+            "4XX": {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -1219,13 +1222,13 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope_DevicesData_"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description 统一错误信封 {ok:false, error, ts} */
+            "4XX": {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -1250,13 +1253,13 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope_PingData_"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description 统一错误信封 {ok:false, error, ts} */
+            "4XX": {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -1281,13 +1284,13 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope_FrpData_"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description 统一错误信封 {ok:false, error, ts} */
+            "4XX": {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -1312,13 +1315,13 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope_GrmApiData_"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description 统一错误信封 {ok:false, error, ts} */
+            "4XX": {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -1347,13 +1350,13 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope_HistoryData_"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description 统一错误信封 {ok:false, error, ts} */
+            "4XX": {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -1378,13 +1381,13 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope_SystemData_"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description 统一错误信封 {ok:false, error, ts} */
+            "4XX": {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -1409,13 +1412,13 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope_CertsData_"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description 统一错误信封 {ok:false, error, ts} */
+            "4XX": {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -1440,13 +1443,13 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope_NetworkData_"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description 统一错误信封 {ok:false, error, ts} */
+            "4XX": {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -1471,13 +1474,13 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope_ServicesData_"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description 统一错误信封 {ok:false, error, ts} */
+            "4XX": {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -1503,13 +1506,13 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope_UpdatesData_"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description 统一错误信封 {ok:false, error, ts} */
+            "4XX": {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };

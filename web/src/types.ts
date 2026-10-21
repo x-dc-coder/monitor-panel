@@ -166,18 +166,6 @@ export interface DevicesData {
   devices: DeviceRow[];
   device_map: Record<string, string>;
 }
-export interface PingResult {
-  device_id: string;
-  tailscale_ip?: string;
-  latency_ms: number | null;
-  latency_min_ms?: number;
-  path: string;
-  loss_percent: number;
-  timed_out: boolean;
-  mock?: boolean;
-  ts?: number;
-  error?: string;
-}
 
 /* ---------------- /api/frp ---------------- */
 export interface TunnelRow {
@@ -251,6 +239,10 @@ export type ServicesData = components["schemas"]["ServicesData"];
 export type GrmRelease = components["schemas"]["GrmLatest"];
 export type GrmRepoRow = components["schemas"]["GrmRepo"];
 export type GrmData = components["schemas"]["GrmApiData"];
+
+/* ---------------- /api/devices/{id}/ping ----------------
+ * 类型来源：types.gen.ts（后端 schemas.py 的 PingData） */
+export type PingData = components["schemas"]["PingData"];
 
 /* ---------------- /api/updates（Phase 3/5：服务更新多源扩展） ---------------- */
 export interface UpdateItemRow {

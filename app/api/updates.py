@@ -13,14 +13,15 @@ from fastapi import APIRouter
 
 from app import db
 from app.api import get_aggregator, ok
-from app.api.schemas import UpdatesEnvelope
+from app.api.schemas import ERROR_RESPONSES, UpdatesEnvelope
 from app.collectors.updates import PROVIDERS
 
 router = APIRouter()
 
 
 @router.get("/updates", responses={200: {"model": UpdatesEnvelope,
-                                        "description": "服务更新多源聚合"}})
+                                        "description": "服务更新多源聚合"},
+                                   **ERROR_RESPONSES})
 async def updates(provider: str | None = None, node: str | None = None):
     snapshot = get_aggregator().latest_for("grm", node)
     rows = db.get_update_items(node_id=node, provider=provider)

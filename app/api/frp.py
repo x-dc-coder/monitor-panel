@@ -7,13 +7,14 @@ from fastapi import APIRouter
 
 from app import config, constants, db
 from app.api import get_aggregator, ok
-from app.api.schemas import FrpEnvelope
+from app.api.schemas import ERROR_RESPONSES, FrpEnvelope
 
 router = APIRouter()
 
 
 @router.get("/frp", responses={200: {"model": FrpEnvelope,
-                                    "description": "frps 隧道 + 链路质量"}})
+                                    "description": "frps 隧道 + 链路质量"},
+                               **ERROR_RESPONSES})
 async def frp(node: str | None = None):
     agg = get_aggregator()
     payload = agg.latest_for(constants.GROUP_FRP_TRAFFIC, node)

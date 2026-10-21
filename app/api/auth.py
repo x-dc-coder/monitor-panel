@@ -16,7 +16,7 @@ from fastapi.responses import RedirectResponse
 
 from app import config
 from app.api import ok
-from app.api.schemas import MeEnvelope
+from app.api.schemas import ERROR_RESPONSES, MeEnvelope
 
 log = logging.getLogger(__name__)
 
@@ -113,7 +113,8 @@ async def logout(request: Request):
 
 
 @router.get("/api/me", responses={200: {"model": MeEnvelope,
-                                       "description": "当前登录用户"}})
+                                       "description": "当前登录用户"},
+                                  **ERROR_RESPONSES})
 async def me(request: Request):
     """获取当前已登录用户信息（前端调用）。"""
     user = request.session.get("user")

@@ -12,13 +12,14 @@ from fastapi import APIRouter
 
 from app import config, db
 from app.api import get_aggregator, ok
-from app.api.schemas import GrmEnvelope
+from app.api.schemas import ERROR_RESPONSES, GrmEnvelope
 
 router = APIRouter()
 
 
 @router.get("/grm", responses={200: {"model": GrmEnvelope,
-                                     "description": "Release 监控（grm 只读聚合）"}})
+                                     "description": "Release 监控（grm 只读聚合）"},
+                               **ERROR_RESPONSES})
 async def grm(node: str | None = None):
     agg = get_aggregator()
     snapshot = agg.latest_for("grm", node)

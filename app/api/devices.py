@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException
 
 from app import config, constants, db
 from app.api import get_aggregator, ok
-from app.api.schemas import DevicesEnvelope, PingEnvelope
+from app.api.schemas import ERROR_RESPONSES, DevicesEnvelope, PingEnvelope
 from app.collectors import get as get_collector
 from app.collectors.base import CollectorError, validate_ip_or_host
 
@@ -33,7 +33,8 @@ def _remember_manual_ping(device_id: str, now: float) -> None:
 
 
 @router.get("/devices", responses={200: {"model": DevicesEnvelope,
-                                         "description": "设备清单"}})
+                                         "description": "设备清单"},
+                                   **ERROR_RESPONSES})
 async def devices(node: str | None = None):
     agg = get_aggregator()
     ts_p = agg.latest_for(constants.GROUP_TS_LATENCY, node)
@@ -100,7 +101,8 @@ async def devices(node: str | None = None):
 
 @router.post("/devices/{device_id}/ping",
              responses={200: {"model": PingEnvelope,
-                             "description": "手动 ping 结果"}})
+                             "description": "手动 ping 结果"},
+                        **ERROR_RESPONSES})
 async def ping_device(device_id: str):
     # 限流 5s/设备（评审 E8）
     now = time.monotonic()

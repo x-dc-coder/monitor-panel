@@ -28,6 +28,16 @@ class Envelope(BaseModel, Generic[T]):
     ts: float
 
 
+class ErrorEnvelope(BaseModel):
+    """统一错误信封（main.py 全局 handler 的错误形态）。"""
+    ok: bool
+    error: str
+    ts: float
+
+
+ERROR_RESPONSES = {"4XX": {"model": ErrorEnvelope, "description": "统一错误信封 {ok:false, error, ts}"}}
+
+
 # ================= /api/services =================
 class ServiceItem(BaseModel):
     device_id: str
