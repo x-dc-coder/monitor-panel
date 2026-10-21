@@ -228,12 +228,18 @@ class ServicesCollector(Collector):
         result = CollectorResult(node_id=config.NODE_ID, group=self.group)
         targets = self._targets()
         registered_rows = db.get_services()
-        registered = {(r["device_id"], r["port"]): r for r in registered_rows}
+        # agent 行（source='agent'）由 agent 独占维护：中心采集器不探测、不重写，
+        # 否则会用 node_id=本机 覆盖成第二行（同 device+port 重复）。
+        agent_owned = {(r["device_id"], r["port"]) for r in registered_rows
+                       if r.get("source") == "agent"}
+        registered = {(r["device_id"], r["port"]): r for r in registered_rows
+                      if r.get("source") != "agent"}
 
         rows: list[dict] = []
         for target in targets:
             dev_id = target["device_id"]
-            ports = self._ports_for(target, registered)
+            ports = [p for p in self._ports_for(target, registered)
+                     if (dev_id, p) not in agent_owned]
             probes = await asyncio.gather(*[self._probe(target, p) for p in ports],
                                           return_exceptions=True)
             for port, r in zip(ports, probes):

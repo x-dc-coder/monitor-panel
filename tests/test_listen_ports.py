@@ -165,3 +165,29 @@ def test_unknown_node_rejected(client, monkeypatch):
     assert r.status_code == 400
     assert "ghost" in r.json()["error"]
     assert db.get_services(node_id="ghost") == []
+
+
+def test_central_collector_skips_agent_ports(client, monkeypatch):
+    """中心采集器不探测 agent 独占端口（否则产生 duplicate 行）。"""
+    from app.collectors.services import ServicesCollector
+    db.upsert_devices("cloud-1", [{"device_id": "ts-aliyun", "name": "aliyun",
+                                   "os": "linux", "online": True}])
+    # 先灌一条 agent 行
+    db.upsert_services("aliyun", [{
+        "device_id": "ts-aliyun", "device_name": "aliyun",
+        "tailscale_ip": "100.64.0.8", "port": 7400,
+        "protocol": "tcp", "source": "agent", "enabled": 1,
+        "status": "open", "first_seen_ts": 1.0, "last_seen_ts": 1.0,
+        "updated_ts": 1.0}])
+    # 伪造 target 与 registered 视图，验证端口集合过滤
+    reg_rows = db.get_services()
+    agent_owned = {(r["device_id"], r["port"]) for r in reg_rows
+                   if r.get("source") == "agent"}
+    registered = {(r["device_id"], r["port"]): r for r in reg_rows
+                  if r.get("source") != "agent"}
+    col = ServicesCollector()
+    target = {"device_id": "ts-aliyun", "device_name": "aliyun",
+              "tailscale_ip": "100.64.0.8"}
+    ports = [p for p in col._ports_for(target, registered)
+             if (target["device_id"], p) not in agent_owned]
+    assert 7400 not in ports, "agent 独占端口不应被中心采集器探测"
