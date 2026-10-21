@@ -365,7 +365,8 @@ class Aggregator:
         payload = result.payload or {}
         if "ports" not in payload:
             return
-        existing = {r["port"]: r for r in db.get_services(node_id=result.node_id)}
+        existing = {(r.get("protocol") or "tcp", r["port"]): r
+                    for r in db.get_services(node_id=result.node_id)}
         dev = self._device_for(result.node_id)
         if dev is not None:
             device_id = dev["device_id"]
@@ -377,7 +378,7 @@ class Aggregator:
         else:
             device_id = device_name = result.node_id
             ip = self._tailscale_ip_for(result.node_id)
-        seen: set[int] = set()
+        seen: set[tuple[str, int]] = set()
         rows: list[dict] = []
         for item in payload.get("ports") or []:
             if not isinstance(item, dict):
@@ -386,16 +387,17 @@ class Aggregator:
                 port = int(item["port"])
             except (KeyError, TypeError, ValueError):
                 continue
-            if port <= 0 or port > 65535 or port in seen:
+            proto = item.get("proto") or "tcp"
+            if port <= 0 or port > 65535 or (proto, port) in seen:
                 continue
-            seen.add(port)
-            prev = existing.get(port) or {}
+            seen.add((proto, port))
+            prev = existing.get((proto, port)) or {}
             rows.append({
                 "device_id": device_id,
                 "device_name": device_name,
                 "tailscale_ip": ip,
                 "port": port,
-                "protocol": item.get("proto") or "tcp",
+                "protocol": proto,
                 "name": None,
                 "auto_name": prev.get("auto_name") or f"{result.node_id}:{port}",
                 "status": prev.get("status") or "open",

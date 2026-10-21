@@ -49,11 +49,12 @@ logging.basicConfig(
 logger = logging.getLogger("host_listen_agent")
 
 
-def parse_ss_output(output: str) -> list[dict[str, Any]]:
-    """解析 `ss -tlnH` 输出 → [{port, proto, addr}]（按 port 去重）。
+def parse_ss_output(output: str, proto: str = "tcp") -> list[dict[str, Any]]:
+    """解析 `ss -tlnH` / `ss -ulnH` 输出 → [{port, proto, addr}]（按 proto+port 去重）。
 
     每行：State Recv-Q Send-Q Local-Address:Port Peer-Address:Port
     Local 形如 0.0.0.0:22 / [::]:80 / 127.0.0.53%lo:53 / *:8080。
+    UDP 与 TCP 可能同号共存，故去重键为 (proto, port)。
     """
     by_port: dict[int, dict[str, Any]] = {}
     for line in output.splitlines():
@@ -71,25 +72,40 @@ def parse_ss_output(output: str) -> list[dict[str, Any]]:
         if not 0 < port <= 65535:
             continue
         addr = addr.strip("[]") or "*"
-        by_port.setdefault(port, {"port": port, "proto": "tcp", "addr": addr})
+        by_port.setdefault(port, {"port": port, "proto": proto, "addr": addr})
     return [by_port[p] for p in sorted(by_port)]
 
 
 def collect_listening_ports(timeout: float) -> list[dict[str, Any]]:
-    """执行 ss 并解析；命令失败/输出无法解析时抛 RuntimeError。"""
+    """采集 TCP + UDP 监听端口（ss -tlnH / -ulnH）。
+
+    两类分别执行：任一失败只告警不致命（UDP 在部分内核/权限下可能不可读）；
+    两者都失败才抛 RuntimeError。
+    """
     cmd = shutil.which("ss") or "/usr/sbin/ss"
-    try:
-        proc = subprocess.run([cmd, "-tlnH"], capture_output=True, text=True,
-                              timeout=timeout, check=False)
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise RuntimeError(f"执行 {cmd} -tlnH 失败: {exc}") from exc
-    if proc.returncode != 0:
-        raise RuntimeError(
-            f"{cmd} -tlnH 退出码 {proc.returncode}: {proc.stderr.strip()}")
-    ports = parse_ss_output(proc.stdout)
-    if proc.stdout.strip() and not ports:
-        raise RuntimeError(f"{cmd} -tlnH 输出无法解析: {proc.stdout[:500]}")
-    return ports
+    merged: dict[tuple[str, int], dict[str, Any]] = {}
+    errors: list[str] = []
+    for flag, proto in (("-tlnH", "tcp"), ("-ulnH", "udp")):
+        try:
+            proc = subprocess.run([cmd, flag], capture_output=True, text=True,
+                                  timeout=timeout, check=False)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            errors.append(f"{flag}: {exc}")
+            continue
+        if proc.returncode != 0:
+            errors.append(f"{flag} 退出码 {proc.returncode}: {proc.stderr.strip()}")
+            continue
+        parsed = parse_ss_output(proc.stdout, proto)
+        if proc.stdout.strip() and not parsed:
+            logger.warning("%s 输出无法解析，已跳过", flag)
+            continue
+        for item in parsed:
+            merged[(proto, item["port"])] = item
+    if not merged:
+        raise RuntimeError(f"{cmd} 采集失败: {'; '.join(errors) or '无输出'}")
+    if errors:
+        logger.warning("部分采集失败（不影响其余）: %s", "; ".join(errors))
+    return [merged[k] for k in sorted(merged, key=lambda x: (x[1], x[0]))]
 
 
 def build_results(node_id: str, ports: list[dict[str, Any]],

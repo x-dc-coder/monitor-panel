@@ -233,7 +233,7 @@ class ServicesCollector(Collector):
         agent_owned = {(r["device_id"], r["port"]) for r in registered_rows
                        if r.get("source") == "agent"}
         registered = {(r["device_id"], r["port"]): r for r in registered_rows
-                      if r.get("source") != "agent"}
+                      if r.get("source") != "agent" and (r.get("protocol") or "tcp") == "tcp"}
 
         rows: list[dict] = []
         for target in targets:

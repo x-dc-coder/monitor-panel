@@ -91,7 +91,12 @@ def test_agent_report_replaces_rows(client, monkeypatch):
     r = _post(client, [{"port": 22, "proto": "tcp"},
                        {"port": 8080, "proto": "tcp"}])
     assert r.status_code == 200, r.text
+    # agent 行只剩 22/8080；7400 的 manual 行神圣保留（不再有 agent 行）
     assert {x["port"] for x in _agent_rows()} == {22, 8080}
+    all_7400 = [x for x in db.get_services(node_id="aliyun")
+                if x["port"] == 7400]
+    assert all_7400 and all(x["source"] == "manual" for x in all_7400), \
+        "7400 应只剩 manual 行"
 
     manual = [x for x in db.get_services(node_id="aliyun")
               if x["source"] == "manual"]
@@ -191,3 +196,24 @@ def test_central_collector_skips_agent_ports(client, monkeypatch):
     ports = [p for p in col._ports_for(target, registered)
              if (target["device_id"], p) not in agent_owned]
     assert 7400 not in ports, "agent 独占端口不应被中心采集器探测"
+
+
+def test_udp_and_tcp_same_port_coexist(client, monkeypatch):
+    """同一端口可同时有 TCP/UDP 行（唯一键含 protocol，不再互相覆盖）。"""
+    monkeypatch.setattr(config, "INGEST_ENABLED", True)
+    monkeypatch.setattr(config, "INGEST_TOKEN", "test-token")
+    db.upsert_devices("cloud-1", [{"device_id": "ts-node", "name": "n1",
+                                   "os": "linux", "online": True}])
+    body = {"results": [{"node_id": "n1", "group": "listen_ports",
+                         "metrics": [{"name": "listening_count", "value": 3}],
+                         "payload": {"ports": [
+                             {"port": 53, "proto": "tcp", "addr": "0.0.0.0"},
+                             {"port": 53, "proto": "udp", "addr": "0.0.0.0"},
+                             {"port": 3478, "proto": "udp", "addr": "*"}]}}]}
+    r = client.post("/api/ingest", json=body,
+                    headers={"Authorization": "Bearer test-token"})
+    assert r.status_code == 200, r.text
+    rows = [x for x in db.get_services(node_id="n1") if x["port"] in (53, 3478)]
+    assert len(rows) == 3, f"期望 3 行（53/tcp、53/udp、3478/udp），实际 {rows}"
+    protos = {(x["port"], x["protocol"]) for x in rows}
+    assert (53, "tcp") in protos and (53, "udp") in protos and (3478, "udp") in protos

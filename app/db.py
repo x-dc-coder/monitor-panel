@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS services (
   first_seen_ts REAL,
   last_seen_ts  REAL,
   updated_ts    REAL,
-  UNIQUE(node_id, device_id, port)
+  UNIQUE(node_id, device_id, protocol, port)
 );
 CREATE INDEX IF NOT EXISTS idx_services_status ON services(status);
 
@@ -196,8 +196,61 @@ _DEVICE_MIGRATION_COLS = {
 }
 
 
+def _migrate_services_unique_protocol(conn: sqlite3.Connection) -> None:
+    """services 唯一键 (node_id, device_id, port) → 加 protocol。
+
+    TCP/UDP 同号端口（如 53）在旧键下会互相覆盖；SQLite 无法改 UNIQUE 约束，
+    只能重建表。幂等：已是新键则直接返回。
+    """
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='services'"
+    ).fetchone()
+    if not row or "UNIQUE(node_id, device_id, protocol, port)" in (row["sql"] or ""):
+        return
+    log.info("db: migrate services unique key += protocol（重建表）")
+    conn.executescript("""
+        BEGIN;
+        CREATE TABLE services_new (
+          id            INTEGER PRIMARY KEY AUTOINCREMENT,
+          node_id       TEXT NOT NULL,
+          device_id     TEXT NOT NULL,
+          device_name   TEXT,
+          tailscale_ip  TEXT,
+          port          INT NOT NULL,
+          name          TEXT,
+          auto_name     TEXT,
+          protocol      TEXT DEFAULT 'tcp',
+          url           TEXT,
+          http_status   INT,
+          latency_ms    REAL,
+          status        TEXT DEFAULT 'unknown',
+          missing_rounds INT DEFAULT 0,
+          source        TEXT DEFAULT 'auto',
+          enabled       INT DEFAULT 1,
+          first_seen_ts REAL,
+          last_seen_ts  REAL,
+          updated_ts    REAL,
+          UNIQUE(node_id, device_id, protocol, port)
+        );
+        INSERT INTO services_new
+          SELECT id, node_id, device_id, device_name, tailscale_ip, port, name,
+                 auto_name, COALESCE(protocol, 'tcp'), url, http_status, latency_ms,
+                 status, missing_rounds, source, enabled, first_seen_ts,
+                 last_seen_ts, updated_ts FROM services;
+        DROP TABLE services;
+        ALTER TABLE services_new RENAME TO services;
+        CREATE INDEX IF NOT EXISTS idx_services_status ON services(status);
+        COMMIT;
+    """)
+    log.info("db: services 表重建完成")
+
+
 def _migrate(conn: sqlite3.Connection) -> None:
     """轻量列迁移：SCHEMA 用 CREATE IF NOT EXISTS，旧库新列需 ALTER 补齐。"""
+    try:
+        _migrate_services_unique_protocol(conn)
+    except sqlite3.Error:
+        log.error("db: migrate services unique key failed", exc_info=True)
     for col, decl in _DEVICE_MIGRATION_COLS.items():
         try:
             cols = {r["name"] for r in conn.execute(
@@ -475,7 +528,7 @@ def upsert_services(node_id: str, rows: list[dict]) -> None:
             "VALUES (:node_id, :device_id, :device_name, :tailscale_ip, :port, "
             ":name, :auto_name, :protocol, :url, :http_status, :latency_ms, :status, "
             ":missing_rounds, :source, :enabled, :first_seen_ts, :last_seen_ts, :updated_ts) "
-            "ON CONFLICT(node_id, device_id, port) DO UPDATE SET "
+            "ON CONFLICT(node_id, device_id, protocol, port) DO UPDATE SET "
             "device_name=excluded.device_name, tailscale_ip=excluded.tailscale_ip, "
             "name=COALESCE(excluded.name, services.name), "
             "auto_name=excluded.auto_name, protocol=excluded.protocol, url=excluded.url, "
@@ -522,18 +575,26 @@ def delete_services(ids: list[int]) -> int:
     return cur.rowcount
 
 
-def delete_agent_services_except(node_id: str, keep_ports: set[int]) -> list[dict]:
+def delete_agent_services_except(node_id: str,
+                                 keep_ports: set) -> list[dict]:
     """agent 上报的替换语义：删除该节点下未出现在本轮清单里的 agent 行。
 
+    keep_ports 元素可为 (proto, port) 元组或 int（向后兼容）。
     只认 source='agent'——manual 行由人工维护，agent 无权删除。
-    返回被删行（id/tailscale_ip/port），供调用方 resolve 对应告警。
+    返回被删行（id/tailscale_ip/port/protocol），供调用方 resolve 对应告警。
     """
     conn = _cursor()
     with _lock:
         rows = conn.execute(
-            "SELECT id, tailscale_ip, port FROM services "
+            "SELECT id, tailscale_ip, port, protocol FROM services "
             "WHERE node_id=? AND source='agent'", (node_id,)).fetchall()
-        doomed = [dict(r) for r in rows if r["port"] not in keep_ports]
+
+        def _kept(r) -> bool:
+            port = r["port"]
+            proto = r["protocol"] if "protocol" in r.keys() else "tcp"
+            return (proto or "tcp", port) in keep_ports or port in keep_ports
+
+        doomed = [dict(r) for r in rows if not _kept(r)]
         if doomed:
             marks = ",".join("?" * len(doomed))
             conn.execute(f"DELETE FROM services WHERE id IN ({marks})",
