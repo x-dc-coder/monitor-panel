@@ -481,10 +481,10 @@ def upsert_services(node_id: str, rows: list[dict]) -> None:
             "auto_name=excluded.auto_name, protocol=excluded.protocol, url=excluded.url, "
             "http_status=excluded.http_status, latency_ms=excluded.latency_ms, "
             "status=excluded.status, missing_rounds=excluded.missing_rounds, "
-            "source=CASE WHEN services.source='manual' THEN 'manual' "
-            "ELSE excluded.source END, "
-            "enabled=CASE WHEN services.source='manual' THEN services.enabled "
-            "ELSE excluded.enabled END, "
+            "source=CASE WHEN services.source IN ('manual','agent') "
+            "THEN services.source ELSE excluded.source END, "
+            "enabled=CASE WHEN services.source IN ('manual','agent') "
+            "THEN services.enabled ELSE excluded.enabled END, "
             "last_seen_ts=excluded.last_seen_ts, updated_ts=excluded.updated_ts",
             rows)
         conn.commit()
@@ -520,6 +520,26 @@ def delete_services(ids: list[int]) -> int:
         cur = conn.execute(f"DELETE FROM services WHERE id IN ({marks})", ids)
         conn.commit()
     return cur.rowcount
+
+
+def delete_agent_services_except(node_id: str, keep_ports: set[int]) -> list[dict]:
+    """agent 上报的替换语义：删除该节点下未出现在本轮清单里的 agent 行。
+
+    只认 source='agent'——manual 行由人工维护，agent 无权删除。
+    返回被删行（id/tailscale_ip/port），供调用方 resolve 对应告警。
+    """
+    conn = _cursor()
+    with _lock:
+        rows = conn.execute(
+            "SELECT id, tailscale_ip, port FROM services "
+            "WHERE node_id=? AND source='agent'", (node_id,)).fetchall()
+        doomed = [dict(r) for r in rows if r["port"] not in keep_ports]
+        if doomed:
+            marks = ",".join("?" * len(doomed))
+            conn.execute(f"DELETE FROM services WHERE id IN ({marks})",
+                         [r["id"] for r in doomed])
+            conn.commit()
+    return doomed
 
 
 # ---------------- grm（Release 监控快照：issue #4） ----------------

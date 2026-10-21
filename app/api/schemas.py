@@ -77,6 +77,24 @@ class ServicesData(BaseModel):
 ServicesEnvelope = Envelope[ServicesData]
 
 
+# ================= /api/ingest?group=listen_ports（预留，不入 openapi） =================
+# agent 上报的监听端口 batch 形状。ingest 路由保持 include_in_schema=False
+# （接口不可发现的安全设计），模型仅供未来文档/类型参考，不挂响应声明。
+class ListenPortItem(BaseModel):
+    port: int
+    proto: str = "tcp"
+    addr: str | None = None
+
+
+class ListenPortsData(BaseModel):
+    ports: list[ListenPortItem]
+    listening_count: int | None = None
+    ts: float | None = None
+
+
+ListenPortsEnvelope = Envelope[ListenPortsData]
+
+
 # ================= /api/grm =================
 class GrmLatest(BaseModel):
     tag: str

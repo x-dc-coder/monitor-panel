@@ -17,6 +17,7 @@ GROUP_HEADSCALE = "headscale"       # headscale 控制面
 GROUP_SERVICES = "services"         # 服务台账（issue #2：端口约定驱动自动发现）
 GROUP_GRM = "grm"                   # Release 监控（issue #4：聚合 github-release-monitor）
 GROUP_LAB = "lab_monitor"           # 本机实验监控（lab-monitor 转发器上报，issue #11）
+GROUP_LISTEN_PORTS = "listen_ports"  # 各机器 agent 自报本机监听端口
 
 METRIC_GROUPS = (
     GROUP_FRP_TRAFFIC,
@@ -29,6 +30,7 @@ METRIC_GROUPS = (
     GROUP_SERVICES,
     GROUP_GRM,
     GROUP_LAB,
+    GROUP_LISTEN_PORTS,
 )
 
 # ---- 各 group 允许的基础指标名 ----
@@ -104,6 +106,9 @@ GROUP_METRICS: dict[str, tuple[str, ...]] = {
         "alerts_crit",         # 未解决 critical 告警数
         "alerts_warn",         # 未解决 warn 告警数
         "monitor_enabled",     # 引擎开关 1/0
+    ),
+    GROUP_LISTEN_PORTS: (
+        "listening_count",     # 本机监听端口数（agent 自报）
     ),
 }
 

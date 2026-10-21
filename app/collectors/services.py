@@ -244,9 +244,13 @@ class ServicesCollector(Collector):
                 if r is not None:  # 开放
                     self._missing[key] = 0
                     known = self._known.get(key, {})
+                    prev = registered.get(key) or {}
                     row = {
                         **r,
-                        "status": "open", "missing_rounds": 0, "source": "auto",
+                        "status": "open", "missing_rounds": 0,
+                        # source/enabled 保持库中原值（manual/agent 行不降级为 auto）
+                        "source": prev.get("source", "auto"),
+                        "enabled": prev["enabled"] if prev.get("enabled") is not None else 1,
                         "first_seen_ts": known.get("first_seen_ts", ts),
                         "last_seen_ts": ts, "updated_ts": ts,
                     }

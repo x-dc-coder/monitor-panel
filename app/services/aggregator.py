@@ -273,12 +273,13 @@ class Aggregator:
     def _prune_services(self, ts: float) -> int:
         """行生命周期（2026-08-24 审查：治理 1199 条未解决误报的根源）。
 
-        删除条件（仅 source=auto；manual 人工登记永不删）：
+        删除条件（仅 source=auto；manual 人工登记与 agent 自报行永不删）：
         1. 端口既不在约定区、也不在该设备 extra 配置里 → 历史登记残留
            （extra 已移除的端口行曾"已登记必探"永生 → 永久 closed 周期告警）
         2. 约定区内 closed 且距最后在线（last_seen_ts）> SERVICES_PRUNE_CLOSED_S
            → 手机 ephemeral / 真下线服务；不用 updated_ts（closed 行每轮
            探测都会刷新它，会让 prune 永不触发）
+        agent 行的生命周期由 agent 上报的替换语义负责，中心采集器只探测不删除。
         删除行时同步 resolve 对应告警（历史误报一并清理）。
         """
         lo, hi = config.SERVICES_PORT_RANGE
@@ -286,7 +287,7 @@ class Aggregator:
         star = extra.get("*", set())
         doomed: dict[int, str] = {}   # row id → alert source
         for row in db.get_services():
-            if row.get("source") == "manual":
+            if row.get("source") in ("manual", "agent"):
                 continue
             port = row.get("port")
             if port is None:
@@ -333,6 +334,92 @@ class Aggregator:
             elif row.get("status") == "open":
                 db.resolve_alerts(src)
         self._prune_services(ts)
+
+    # ---------------- listen_ports（agent 自报本机监听端口） ----------------
+    @staticmethod
+    def _tailscale_ip_for(node_id: str) -> str | None:
+        """按节点名查 devices 表：device_id/name/MagicDNS 短名任一命中即取 IP。"""
+        return (Aggregator._device_for(node_id) or {}).get("tailscale_ip")
+
+    @staticmethod
+    def _device_for(node_id: str) -> dict | None:
+        """按节点名查 devices 表行：device_id/name/MagicDNS 短名任一命中。
+
+        agent 行的 services.device_id 必须解析为 devices.device_id（而非
+        node_id 字面值）——中心采集器「已登记必探」按 (devices.device_id,
+        port) 键匹配，键不一致则 agent 端口永无真实探测。
+        """
+        for d in db.get_devices():
+            dns_short = (d.get("dns_name") or "").split(".", 1)[0]
+            if node_id in (d.get("device_id"), d.get("name"), dns_short):
+                return d
+        return None
+
+    def _on_listen_ports(self, result: CollectorResult, ts: float) -> None:
+        """agent 自报监听端口 → services 行（source='agent'）+ 替换语义。
+
+        agent 是"本机在监听"的唯一权威：本轮清单即该节点 agent 行的全集，
+        清单外的旧 agent 行删除；manual 行由人工维护，永不删除/覆盖。
+        open/closed 仍由中心 services 采集器探测归因（防火墙拦截 = 监听但连不上）。
+        """
+        payload = result.payload or {}
+        if "ports" not in payload:
+            return
+        existing = {r["port"]: r for r in db.get_services(node_id=result.node_id)}
+        dev = self._device_for(result.node_id)
+        if dev is not None:
+            device_id = dev["device_id"]
+            device_name = dev.get("name") or result.node_id
+            ip = dev.get("tailscale_ip")
+        elif result.node_id == config.NODE_ID:
+            # 本机自身不在 devices 表（无 tailscale 身份）时走 local 目标约定
+            device_id, device_name, ip = "local", "localhost", "127.0.0.1"
+        else:
+            device_id = device_name = result.node_id
+            ip = self._tailscale_ip_for(result.node_id)
+        seen: set[int] = set()
+        rows: list[dict] = []
+        for item in payload.get("ports") or []:
+            if not isinstance(item, dict):
+                continue
+            try:
+                port = int(item["port"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if port <= 0 or port > 65535 or port in seen:
+                continue
+            seen.add(port)
+            prev = existing.get(port) or {}
+            rows.append({
+                "device_id": device_id,
+                "device_name": device_name,
+                "tailscale_ip": ip,
+                "port": port,
+                "protocol": item.get("proto") or "tcp",
+                "name": None,
+                "auto_name": prev.get("auto_name") or f"{result.node_id}:{port}",
+                "status": prev.get("status") or "open",
+                "enabled": prev.get("enabled", 1),
+                "source": "agent",
+                "first_seen_ts": prev.get("first_seen_ts") or ts,
+                "last_seen_ts": ts,
+                "updated_ts": ts,
+            })
+        if rows:
+            db.upsert_services(result.node_id, rows)
+
+        # 替换语义：只删本节点 source='agent' 且不在本轮清单中的行
+        for gone in db.delete_agent_services_except(result.node_id, seen):
+            db.resolve_alerts(
+                f"service:{gone.get('tailscale_ip') or ''}:{gone['port']}")
+
+        # handler 在 samples 批量写入之后执行；agent 未随 metrics 上报时补写计数
+        has_count = any((m.name if isinstance(m, Metric) else m[0]) == "listening_count"
+                        for m in result.metrics)
+        if not has_count:
+            db.insert_samples(result.node_id, constants.GROUP_LISTEN_PORTS,
+                              [("listening_count", len(rows), ts)])
+        result.add("listening_count", len(rows), ts)
 
     # ---------------- grm（Release 监控：payload → grm_repos 表，只读聚合） ----------------
     def _on_grm(self, result: CollectorResult, ts: float) -> None:
