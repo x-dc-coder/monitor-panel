@@ -373,7 +373,10 @@ def query_history(metric_name: str, since_ts: float, bucket_s: float,
 
 def query_latest_by_group(group: str, limit_metrics: int = 200,
                           node_id: str | None = None) -> dict[str, float]:
-    """每个 metric_name 取最新一条（MAX(id)）。"""
+    """每个 metric_name 取最新一条（MAX(id)）。
+
+    非热路径：全组 MAX(id) 扫描；生产读取用 Aggregator.latest_for / query_latest_metrics。
+    """
     conn = _cursor()
     if node_id is not None:
         sql = ("SELECT s.metric_name, s.value, s.ts FROM samples s "
@@ -390,6 +393,30 @@ def query_latest_by_group(group: str, limit_metrics: int = 200,
     with _lock:
         rows = conn.execute(sql, params).fetchall()
     return {r["metric_name"]: float(r["value"]) for r in rows}
+
+
+def query_latest_metrics(group: str, names: list[str],
+                         node_id: str | None = None) -> dict[str, float]:
+    """按指标名逐条取最新一行（索引点查，热路径安全）。
+
+    走 idx_samples_node / idx_samples_lookup 的等值前缀 + ORDER BY ts DESC LIMIT 1，
+    避免 query_latest_by_group 的全组 MAX(id) 扫描；names 循环单条查询。
+    """
+    conn = _cursor()
+    if node_id is not None:
+        sql = ("SELECT value FROM samples WHERE node_id=? AND metric_group=? "
+               "AND metric_name=? ORDER BY ts DESC LIMIT 1")
+    else:
+        sql = ("SELECT value FROM samples WHERE metric_group=? AND metric_name=? "
+               "ORDER BY ts DESC LIMIT 1")
+    out: dict[str, float] = {}
+    with _lock:
+        for name in names:
+            params = (node_id, group, name) if node_id is not None else (group, name)
+            row = conn.execute(sql, params).fetchone()
+            if row is not None:
+                out[name] = float(row["value"])
+    return out
 
 
 def query_sample_range(metric_name: str) -> tuple[float | None, float | None, int]:

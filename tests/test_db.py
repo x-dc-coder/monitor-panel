@@ -134,3 +134,40 @@ def test_cleanup_prunes_stale_devices():
     app_db.cleanup(now)
     ids = {r["device_id"] for r in app_db.get_devices()}
     assert "fresh" in ids and "ghost" not in ids
+
+
+def test_query_latest_metrics_picks_newest():
+    ts = time.time()
+    db.insert_samples("cloud-1", "system", [("cpu_percent", 10.0, ts)])
+    db.insert_samples("cloud-1", "system", [("cpu_percent", 20.0, ts + 1)])
+    db.insert_samples("cloud-1", "system", [("cpu_percent", 30.0, ts + 2)])
+    latest = db.query_latest_metrics("system", ["cpu_percent"])
+    assert latest == {"cpu_percent": 30.0}
+
+
+def test_query_latest_metrics_suffixed_name():
+    ts = time.time()
+    db.insert_samples("cloud-1", "ts_latency", [
+        ("latency_ms.oneplus13", 18.5, ts),
+        ("latency_ms.oneplus13", 21.0, ts + 1),
+        ("latency_ms.laptop", 3.0, ts),
+    ])
+    latest = db.query_latest_metrics("ts_latency", ["latency_ms.oneplus13"])
+    assert latest == {"latency_ms.oneplus13": 21.0}
+
+
+def test_query_latest_metrics_node_filtering():
+    ts = time.time()
+    db.insert_samples("cloud-1", "system", [("cpu_percent", 10.0, ts)])
+    db.insert_samples("cloud-2", "system", [("cpu_percent", 90.0, ts + 1)])
+    assert db.query_latest_metrics("system", ["cpu_percent"], node_id="cloud-1") == {
+        "cpu_percent": 10.0}
+    assert db.query_latest_metrics("system", ["cpu_percent"], node_id="cloud-2") == {
+        "cpu_percent": 90.0}
+    # 无 node 过滤时取全库最新
+    assert db.query_latest_metrics("system", ["cpu_percent"]) == {"cpu_percent": 90.0}
+
+
+def test_query_latest_metrics_empty():
+    assert db.query_latest_metrics("system", ["cpu_percent", "mem_percent"]) == {}
+    assert db.query_latest_metrics("system", []) == {}

@@ -34,7 +34,9 @@ async def system(node: str | None = Query(None)):
     }
     # 快照缺失时无条件回退 samples 最新值（重启后首轮采集前）
     if data["cpu_percent"] is None:
-        latest = db.query_latest_by_group(constants.GROUP_SYSTEM, node_id=node or config.NODE_ID)
+        latest = db.query_latest_metrics(constants.GROUP_SYSTEM,
+                                         ["cpu_percent", "mem_percent"],
+                                         node_id=node or config.NODE_ID)
         data["cpu_percent"] = latest.get("cpu_percent")
         data["mem_percent"] = latest.get("mem_percent")
     return ok(data)
