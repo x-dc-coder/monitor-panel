@@ -70,6 +70,12 @@ export function renderOverview(): string {
       "util " + (o.lab && o.lab.gpu_util_percent != null ? o.lab.gpu_util_percent + "%" : "—"),
       "temp " + (o.lab && o.lab.gpu_temp_c != null ? o.lab.gpu_temp_c + "°C" : "—"),
       o.lab && o.lab.monitor_enabled === 0 ? "paused" : "", "violet", "lab") +
+    kpi("08", "TAISHAN",
+      o.taishan && o.taishan.active_node ? o.taishan.active_node : "—", "",
+      (o.taishan && o.taishan.score != null ? Math.round(o.taishan.score) + "ms" : "—") +
+        " · " + (o.taishan && o.taishan.qualified_count != null ? o.taishan.qualified_count : "—") + " 合格",
+      o.taishan && o.taishan.state ? o.taishan.state : "—",
+      o.taishan && o.taishan.state === "all_failed" ? "warn" : "", "", null) +
     "</div>" +
     '<div class="grid2">' +
     win("设备 · devices", "tailscale status --json · 30s",

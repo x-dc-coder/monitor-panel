@@ -10,13 +10,14 @@ import { renderProbes } from "./probes";
 import { renderReleases } from "./releases";
 import { renderServices } from "./services";
 import { renderSettings } from "./settings";
+import { renderTaishan } from "./taishan";
 import { renderTunnels } from "./tunnels";
 
 /** 视图 id 字面量联合：漏注册/拼错在编译期报错 */
 export type ViewId =
   | "overview" | "devices" | "tunnels" | "links"
   | "services" | "releases" | "probes" | "certs" | "alerts"
-  | "lab" | "settings";
+  | "lab" | "taishan" | "settings";
 
 export type ViewRenderer = () => string;
 
@@ -31,6 +32,7 @@ export const views: Record<ViewId, ViewRenderer> = {
   certs: renderCerts,
   alerts: renderAlerts,
   lab: renderLab,
+  taishan: renderTaishan,
   settings: renderSettings,
 };
 

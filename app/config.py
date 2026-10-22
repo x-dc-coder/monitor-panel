@@ -245,6 +245,9 @@ THRESHOLDS = {
     "ts_key_crit_days": _env_int("MONITOR_THRESHOLD_TS_KEY_CRIT_DAYS", 3),
 }
 ALERT_COOLDOWN_S = _env_float("MONITOR_ALERT_COOLDOWN_S", 1800)   # 同类告警 30min 冷却
+# TaiShan 停报看门狗阈值：timer 周期 30min 的 3 倍
+TAISHAN_STALE_S = _env_int("MONITOR_TAISHAN_STALE_S", 5400)
+TAISHAN_WATCHDOG_INTERVAL_S = _env_int("MONITOR_TAISHAN_WATCHDOG_INTERVAL_S", 600)
 NETWORK_PROBE_ALERT = _env_bool("MONITOR_NETWORK_PROBE_ALERT", False)  # 探测告警默认关
 
 # ================= 数据库 =================

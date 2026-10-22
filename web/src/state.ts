@@ -1,7 +1,7 @@
 /** 轮询结果缓存：pollers 写入，视图读取；切换视图时立即刷新。 */
 import type {
   AlertsData, CertsData, DevicesData, FrpData, GrmData, HealthzData,
-  NetworkData, OverviewData, ServicesData, UpdatesData,
+  NetworkData, OverviewData, ServicesData, TaishanData, UpdatesData,
 } from "./types";
 
 export interface SparkCache {
@@ -20,6 +20,7 @@ export const S: {
   probes: NetworkData | null;
   services: ServicesData | null;
   releases: GrmData | null;
+  taishan: TaishanData | null;
   updates: UpdatesData | null;
   alerts: AlertsData | null;
   healthz: HealthzData | null;
@@ -39,6 +40,7 @@ export const S: {
   probes: null,
   services: null,
   releases: null,
+  taishan: null,
   updates: null,
   alerts: null,
   healthz: null,

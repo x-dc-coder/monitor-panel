@@ -96,6 +96,7 @@ _ENVELOPE_ENDPOINTS = [
     ("/api/services", {}),
     ("/api/updates", {}),
     ("/api/alerts", {}),
+    ("/api/taishan", {}),
 ]
 
 

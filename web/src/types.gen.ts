@@ -297,6 +297,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/taishan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Taishan */
+        get: operations["taishan_api_taishan_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/healthz": {
         parameters: {
             query?: never;
@@ -548,6 +565,14 @@ export interface components {
             /** Ok */
             ok: boolean;
             data: components["schemas"]["SystemData"];
+            /** Ts */
+            ts: number;
+        };
+        /** Envelope[TaishanData] */
+        Envelope_TaishanData_: {
+            /** Ok */
+            ok: boolean;
+            data: components["schemas"]["TaishanData"];
             /** Ts */
             ts: number;
         };
@@ -813,6 +838,7 @@ export interface components {
             lab?: {
                 [key: string]: unknown;
             } | null;
+            taishan?: components["schemas"]["TaishanOverview"] | null;
             alerts: components["schemas"]["AlertsOverview"];
             /** Nodes */
             nodes: components["schemas"]["NodeInfo"][];
@@ -975,6 +1001,57 @@ export interface components {
             backend_state?: string | null;
             /** Any Derp */
             any_derp: boolean;
+        };
+        /**
+         * TaishanCandidate
+         * @description 候选节点测速明细（score 为加权毫秒，越低越好）。
+         */
+        TaishanCandidate: {
+            /** Name */
+            name: string;
+            /** Score */
+            score?: number | null;
+            /** Base */
+            base?: number | null;
+            /** Openai */
+            openai?: number | null;
+            /** Gemini */
+            gemini?: number | null;
+        };
+        /** TaishanData */
+        TaishanData: {
+            /** Active Node */
+            active_node?: string | null;
+            /** State */
+            state?: string | null;
+            /** Summary */
+            summary?: string | null;
+            /** Qualified Count */
+            qualified_count?: number | null;
+            /**
+             * Top Candidates
+             * @default []
+             */
+            top_candidates: components["schemas"]["TaishanCandidate"][];
+            /** Switched */
+            switched?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+            /** Ts */
+            ts?: number | null;
+        };
+        /** TaishanOverview */
+        TaishanOverview: {
+            /** Active Node */
+            active_node?: string | null;
+            /** Score */
+            score?: number | null;
+            /** Qualified Count */
+            qualified_count?: number | null;
+            /** State */
+            state?: string | null;
+            /** Ts */
+            ts?: number | null;
         };
         /** TunnelRow */
         TunnelRow: {
@@ -1504,6 +1581,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_UpdatesData_"];
+                };
+            };
+            /** @description 统一错误信封 {ok:false, error, ts} */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    taishan_api_taishan_get: {
+        parameters: {
+            query?: {
+                node?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description TaiShan 出网质量快照 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_TaishanData_"];
                 };
             };
             /** @description 统一错误信封 {ok:false, error, ts} */

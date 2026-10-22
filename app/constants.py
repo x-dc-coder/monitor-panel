@@ -18,6 +18,7 @@ GROUP_SERVICES = "services"         # 服务台账（issue #2：端口约定驱�
 GROUP_GRM = "grm"                   # Release 监控（issue #4：聚合 github-release-monitor）
 GROUP_LAB = "lab_monitor"           # 本机实验监控（lab-monitor 转发器上报，issue #11）
 GROUP_LISTEN_PORTS = "listen_ports"  # 各机器 agent 自报本机监听端口
+GROUP_TAISHAN = "taishan"           # 树莓派 TaiShan 出网质量（dc-pi ingest 上报）
 
 METRIC_GROUPS = (
     GROUP_FRP_TRAFFIC,
@@ -31,6 +32,7 @@ METRIC_GROUPS = (
     GROUP_GRM,
     GROUP_LAB,
     GROUP_LISTEN_PORTS,
+    GROUP_TAISHAN,
 )
 
 # ---- 各 group 允许的基础指标名 ----
@@ -109,6 +111,13 @@ GROUP_METRICS: dict[str, tuple[str, ...]] = {
     ),
     GROUP_LISTEN_PORTS: (
         "listening_count",     # 本机监听端口数（agent 自报）
+    ),
+    GROUP_TAISHAN: (
+        "score",               # 加权毫秒 base*0.4+openai*0.3+gemini*0.3（越低越好）
+        "latency_base_ms",     # Stage1 gstatic/generate_204
+        "latency_openai_ms",   # Stage2 ios.chat.openai.com
+        "latency_gemini_ms",   # Stage3 gemini.google.com
+        "qualified_count",     # 三阶段全部合格的候选节点数
     ),
 }
 

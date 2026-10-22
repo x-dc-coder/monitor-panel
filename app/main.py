@@ -20,7 +20,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app import api as api_mod
 from app import config, db
 from app.api import (auth, devices, frp, grm, history, ingest, overview,
-                     services, system, updates)
+                     services, system, taishan, updates)
 from app.collectors import build_registry
 from app.scheduler import Scheduler
 from app.services.aggregator import Aggregator
@@ -74,6 +74,12 @@ async def lifespan(app: FastAPI):
     async def cleanup_job() -> None:
         await db.cleanup_async()   # DELETE+checkpoint 走 to_thread，不阻塞事件循环
     sched.add("cleanup", config.CLEANUP_INTERVAL_S, cleanup_job, timeout=30)
+
+    async def taishan_watchdog_job() -> None:
+        # 停报检测：dc-pi 的 TaiShan timer 挂了也只剩这一条发现通道
+        await asyncio.to_thread(agg.check_taishan_stale)
+    sched.add("taishan_watchdog", config.TAISHAN_WATCHDOG_INTERVAL_S,
+              taishan_watchdog_job, timeout=30)
 
     run_task = asyncio.create_task(sched.run())
     app.state.scheduler = sched
@@ -162,7 +168,7 @@ app.include_router(auth.router)
 
 for router in (overview.router, devices.router, frp.router, grm.router,
                history.router, system.router, services.router, ingest.router,
-               updates.router):
+               updates.router, taishan.router):
     app.include_router(router, prefix="/api")
 
 

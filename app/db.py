@@ -155,6 +155,12 @@ CREATE TABLE IF NOT EXISTS update_items (
   UNIQUE(node_id, provider, item_key)
 );
 CREATE INDEX IF NOT EXISTS idx_update_items ON update_items(provider, is_new);
+
+CREATE TABLE IF NOT EXISTS taishan_snapshot (
+  node_id    TEXT PRIMARY KEY,   -- 上报节点（dc-pi）
+  payload    TEXT NOT NULL,      -- JSON：active_node/state/summary/top_candidates/...
+  updated_ts REAL NOT NULL
+);
 """
 
 
@@ -526,6 +532,53 @@ def get_tunnels(node_id: str | None = None) -> list[dict]:
     with _lock:
         rows = conn.execute(sql, params).fetchall()
     return [dict(r) for r in rows]
+
+
+# ---------------- taishan_snapshot（TaiShan 出网质量：单行/节点，跨重启保留） ----------------
+def upsert_taishan_snapshot(node_id: str, payload: dict, ts: float) -> None:
+    """taishan payload 快照（单行/节点）。ON CONFLICT(node_id) DO UPDATE。"""
+    conn = _cursor()
+    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    with _lock:
+        conn.execute(
+            "INSERT INTO taishan_snapshot(node_id, payload, updated_ts) VALUES (?, ?, ?) "
+            "ON CONFLICT(node_id) DO UPDATE SET payload=excluded.payload, "
+            "updated_ts=excluded.updated_ts",
+            (node_id, body, ts))
+        conn.commit()
+
+
+def get_taishan_snapshot(node_id: str) -> dict | None:
+    """PK 点查：返回 payload dict；payload 无 ts 时回填快照写入时刻。"""
+    conn = _cursor()
+    with _lock:
+        row = conn.execute(
+            "SELECT payload, updated_ts FROM taishan_snapshot WHERE node_id=?",
+            (node_id,)).fetchone()
+    if row is None:
+        return None
+    data = json.loads(row["payload"])
+    if not isinstance(data, dict):
+        return None
+    data.setdefault("ts", row["updated_ts"])
+    return data
+
+
+def has_taishan_snapshot() -> bool:
+    """是否曾有过上报（停报看门狗区分冷启动与真停报）。"""
+    conn = _cursor()
+    with _lock:
+        row = conn.execute("SELECT 1 FROM taishan_snapshot LIMIT 1").fetchone()
+    return row is not None
+
+
+def taishan_updated_ts() -> float | None:
+    """快照表最近写入时刻（重启后内存无心跳时的看门狗基准）。"""
+    conn = _cursor()
+    with _lock:
+        row = conn.execute(
+            "SELECT MAX(updated_ts) AS ts FROM taishan_snapshot").fetchone()
+    return float(row["ts"]) if row and row["ts"] is not None else None
 
 
 # ---------------- services（服务台账：自动发现 + 探活快照） ----------------

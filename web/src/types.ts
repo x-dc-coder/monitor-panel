@@ -128,6 +128,7 @@ export interface OverviewData {
   network: NetworkSummary;
   grm?: GrmSummary;
   lab?: LabSummary;
+  taishan?: TaishanOverview | null;
   alerts: { unresolved: number };
   nodes: NodeInfo[];
 }
@@ -239,6 +240,12 @@ export type ServicesData = components["schemas"]["ServicesData"];
 export type GrmRelease = components["schemas"]["GrmLatest"];
 export type GrmRepoRow = components["schemas"]["GrmRepo"];
 export type GrmData = components["schemas"]["GrmApiData"];
+
+/* ---------------- /api/taishan（issue #9：泰山代理测速/故障转移） ----------------
+ * 类型来源：types.gen.ts（同 services，后端 schemas.py 权威） */
+export type TaishanCandidate = components["schemas"]["TaishanCandidate"];
+export type TaishanData = components["schemas"]["TaishanData"];
+export type TaishanOverview = components["schemas"]["TaishanOverview"];
 
 /* ---------------- /api/devices/{id}/ping ----------------
  * 类型来源：types.gen.ts（后端 schemas.py 的 PingData） */

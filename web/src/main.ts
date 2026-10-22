@@ -6,7 +6,7 @@ import { api } from "./api";
 import { S, setCur, setNode } from "./state";
 import type {
   AlertsData, CertsData, DevicesData, FrpData, GrmData, HealthzData,
-  HistoryData, NetworkData, OverviewData, ServicesData, UpdatesData,
+  HistoryData, NetworkData, OverviewData, ServicesData, TaishanData, UpdatesData,
 } from "./types";
 import { fmtDate, fmtTs } from "./fmt";
 import { guard } from "./guard";
@@ -123,6 +123,12 @@ async function pollServices(): Promise<void> {
     if (S.cur === "services") render();
   } catch { /* 静默 */ }
 }
+async function pollTaishan(): Promise<void> {
+  try {
+    S.taishan = await api<TaishanData>("/api/taishan?node=dc-pi");
+    if (S.cur === "taishan") render();
+  } catch { /* 静默 */ }
+}
 async function pollReleases(): Promise<void> {
   try {
     const [grmRes, updatesRes] = await Promise.allSettled([
@@ -180,6 +186,7 @@ function bindView(v: string): void {
   if (v === "links") void import("./views/links").then((m) => m.bindLinks());
   if (v === "probes") void import("./views/probes").then((m) => m.renderProbeOut());
   if (v === "lab") void import("./views/lab").then((m) => m.bindLab());
+  if (v === "taishan") void import("./views/taishan").then((m) => m.bindTaishan());
   if (v === "releases") void import("./views/releases").then((m) => m.bindReleases());
   // 通用表格交互（分页/筛选/分组）——各视图渲染后挂载
   void import("./table").then((m) => m.bindTableForView(v));
@@ -207,6 +214,7 @@ window.addEventListener("node-change", () => {
   void pollCerts();
   void pollProbes();
   void pollServices();
+  void pollTaishan();
   void pollReleases();
   void pollAlerts();
   void pollHealthz();
@@ -245,6 +253,7 @@ function boot(): void {
   void pollCerts();
   void pollProbes();
   void pollServices();
+  void pollTaishan();
   void pollReleases();
   void pollAlerts();
   void pollHealthz();
@@ -255,6 +264,7 @@ function boot(): void {
   window.setInterval(guard(pollCerts), 30000);
   window.setInterval(guard(pollProbes), 30000);
   window.setInterval(guard(pollServices), 30000);
+  window.setInterval(guard(pollTaishan), 30000);
   window.setInterval(guard(pollReleases), 30000);
   window.setInterval(guard(pollHealthz), 30000);
   window.setInterval(guard(refreshSpark), 30000);

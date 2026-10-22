@@ -8,7 +8,7 @@
     "build:dev": "esbuild web/src/main.ts --bundle --outfile=web/dist/app.js --sourcemap",
     "watch": "esbuild web/src/main.ts --bundle --outfile=web/dist/app.js --sourcemap --watch",
     "typecheck": "tsc --noEmit",
-    "test": "esbuild tests/table.test.ts --bundle --platform=node --format=cjs --outfile=/tmp/table.test.cjs && esbuild tests/poll.test.ts --bundle --platform=node --format=cjs --outfile=/tmp/poll.test.cjs && node --test /tmp/table.test.cjs /tmp/poll.test.cjs",
+    "test": "esbuild tests/table.test.ts --bundle --platform=node --format=cjs --outfile=/tmp/table.test.cjs && esbuild tests/poll.test.ts --bundle --platform=node --format=cjs --outfile=/tmp/poll.test.cjs && esbuild tests/taishan.test.ts --bundle --platform=node --format=cjs --outfile=/tmp/taishan.test.cjs && node --test /tmp/table.test.cjs /tmp/poll.test.cjs /tmp/taishan.test.cjs",
     "gen:types": "node scripts/gen_types.js",
     "verify:e2e": "node scripts/verify-panel.cjs"
   },

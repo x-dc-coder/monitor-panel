@@ -17,6 +17,22 @@ from app.collectors.base import CollectorResult, Metric
 
 log = logging.getLogger(__name__)
 
+# payload 落库前的大小防御：异常大上报（误配/恶意）不得撑爆快照表
+_TAISHAN_MAX_CANDIDATES = 20
+_TAISHAN_MAX_SUMMARY = 300
+
+
+def _taishan_payload_guard(payload: dict) -> dict:
+    """截断 top_candidates 到前 20 条、summary 到 300 字符；其余字段原样透传。"""
+    out = dict(payload)
+    candidates = out.get("top_candidates")
+    if isinstance(candidates, list):
+        out["top_candidates"] = candidates[:_TAISHAN_MAX_CANDIDATES]
+    summary = out.get("summary")
+    if isinstance(summary, str):
+        out["summary"] = summary[:_TAISHAN_MAX_SUMMARY]
+    return out
+
 
 class Aggregator:
     def __init__(self) -> None:
@@ -440,6 +456,46 @@ class Aggregator:
         items = grm_provider.rows_to_items(result.node_id, rows, ts)
         db.upsert_update_items(result.node_id, items, prune=True)
 
+    # ---------------- taishan（dc-pi 出网质量：payload 快照 + 全节点失效告警） ----------------
+    def _on_taishan(self, result: CollectorResult, ts: float) -> None:
+        """payload 持久快照 + 全节点失效 P1 告警。
+
+        qualified_count 从 result.metrics 读（白名单保证存在），不依赖 payload 契约；
+        ingest 的 events 字段会被静默丢弃，告警必须在此生成。
+        """
+        qualified = next((m.value for m in result.metrics
+                          if isinstance(m, Metric) and m.name == "qualified_count"), None)
+        payload = result.payload or {}
+        src = "taishan:proxy"
+        if (qualified is not None and qualified <= 0) or payload.get("state") == "all_failed":
+            self._alert(constants.LEVEL_CRIT, src,
+                        "TaiShan 全部候选节点失效（三阶段测速零合格），dc-pi 出网不可用")
+        else:
+            db.resolve_alerts(src)
+        if payload:
+            db.upsert_taishan_snapshot(result.node_id, _taishan_payload_guard(payload), ts)
+
+    def check_taishan_stale(self, now: float | None = None) -> None:
+        """停报看门狗：最近一轮上报超 90min（3× timer 周期）→ warn，恢复 resolve。
+
+        冷启动（重启后内存无心跳）以快照表 updated_ts 为基准；从未上报过则不告警。
+        """
+        if not db.has_taishan_snapshot():
+            return
+        now = time.time() if now is None else now
+        latest = max((v for (_, g), v in self.latest_ts.items()
+                      if g == constants.GROUP_TAISHAN), default=None)
+        if latest is None:
+            latest = db.taishan_updated_ts()
+        if latest is None:
+            return
+        src = "taishan:stale"
+        if now - latest > config.TAISHAN_STALE_S:
+            self._alert(constants.LEVEL_WARN, src,
+                        f"dc-pi TaiShan 超过 {config.TAISHAN_STALE_S // 60} 分钟未上报")
+        else:
+            db.resolve_alerts(src)
+
     # ---------------- 告警 ----------------
     @staticmethod
     def _alert(level: str, source: str, message: str) -> None:
@@ -462,6 +518,12 @@ class Aggregator:
         probes = net_p.get("probes", [])
         grm_p = self.latest_for(constants.GROUP_GRM, nid)
         lab_p = self.latest_for(constants.GROUP_LAB, nid)
+        taishan_p = self.latest_for(constants.GROUP_TAISHAN, nid)
+        # payload 契约无顶层 score，从 samples 点查兜底（走 query_latest_metrics 索引点查，重启后仍有效）
+        taishan_score = taishan_p.get("score")
+        if taishan_score is None:
+            taishan_score = db.query_latest_metrics(
+                constants.GROUP_TAISHAN, ["score"], node_id=nid).get("score")
         node_ts = [v for (n, _), v in self.latest_ts.items() if n == nid]
         updated = max(node_ts, default=None)
         return {
@@ -532,6 +594,13 @@ class Aggregator:
                 "experiment": lab_p.get("experiment"),
                 "procs_top": lab_p.get("procs_top") or [],
                 "tags": lab_p.get("tags") or [],
+            },
+            "taishan": {
+                "active_node": taishan_p.get("active_node"),
+                "score": taishan_score,
+                "qualified_count": taishan_p.get("qualified_count"),
+                "state": taishan_p.get("state"),
+                "ts": taishan_p.get("ts"),
             },
             "alerts": {"unresolved": db.count_unresolved_alerts()},
             "nodes": [

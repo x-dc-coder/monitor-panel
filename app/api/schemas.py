@@ -323,6 +323,30 @@ class PingData(BaseModel):
 PingEnvelope = Envelope[PingData]
 
 
+# ================= /api/taishan =================
+class TaishanCandidate(BaseModel):
+    """候选节点测速明细（score 为加权毫秒，越低越好）。"""
+    name: str
+    score: float | None = None
+    base: float | None = None
+    openai: float | None = None
+    gemini: float | None = None
+
+
+class TaishanData(BaseModel):
+    active_node: str | None = None
+    state: str | None = None            # 脚本自定义态：healthy / all_failed / degraded
+    summary: str | None = None
+    qualified_count: float | None = None
+    top_candidates: list[TaishanCandidate] = []
+    switched: bool | None = None
+    reason: str | None = None
+    ts: float | None = None             # 采集时刻（payload.ts 或快照表 updated_ts）
+
+
+TaishanEnvelope = Envelope[TaishanData]
+
+
 # ================= /api/alerts =================
 class AlertRow(BaseModel):
     id: int
@@ -427,6 +451,14 @@ class GrmOverview(BaseModel):
     base_url: str | None = None
 
 
+class TaishanOverview(BaseModel):
+    active_node: str | None = None
+    score: float | None = None
+    qualified_count: float | None = None
+    state: str | None = None
+    ts: float | None = None
+
+
 class AlertsOverview(BaseModel):
     unresolved: int
 
@@ -444,6 +476,7 @@ class OverviewData(BaseModel):
     grm: GrmOverview
     # lab 区块为 camelCase passthrough，字段治理延后（已知债务）
     lab: dict[str, Any] | None = None
+    taishan: TaishanOverview | None = None
     alerts: AlertsOverview
     nodes: list[NodeInfo]
 
