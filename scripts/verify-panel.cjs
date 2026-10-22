@@ -81,6 +81,10 @@ function resolveChromium() {
   });
   const page = await ctx.newPage();
   page.on("console", (m) => { if (m.type() === "error") results.consoleErrors.push(m.text().slice(0, 160)); });
+  // /api/me 未登录按规范返回 401 信封（e5008e2 起）；mock fail-open 模式无会话必现，
+  // 浏览器把 4xx 响应记为资源错误属预期噪声——按实际发生的 /api/me 401 数量在门禁处抵扣
+  let me401Count = 0;
+  page.on("response", (r) => { if (r.status() === 401 && r.url().includes("/api/me")) me401Count += 1; });
   page.on("pageerror", (e) => results.consoleErrors.push("PAGEERROR: " + String(e).slice(0, 160)));
 
   await page.goto(BASE + "/", { waitUntil: "domcontentloaded" });
@@ -154,6 +158,13 @@ function resolveChromium() {
   // ---------- 判定 ----------
   const fail = [];
   if (!results.authOk) fail.push("Basic Auth 登录失败");
+  // 抵扣 /api/me 401 的预期资源错误（数量对齐，防误伤其他 401）
+  while (me401Count > 0) {
+    const i = results.consoleErrors.findIndex((t) => t.includes("status of 401"));
+    if (i < 0) break;
+    results.consoleErrors.splice(i, 1);
+    me401Count -= 1;
+  }
   if (results.consoleErrors.length) fail.push("console errors: " + results.consoleErrors.length);
   for (const v of results.views) if (v.desktopOverflowPx > 0) fail.push(`桌面 ${v.view} 横向溢出 ${v.desktopOverflowPx}px`);
   if (!results.releases.cards) fail.push("Release 监控无卡片（#4）");
